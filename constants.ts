@@ -1,3 +1,4 @@
+
 import { TimeZoneConfig } from './types';
 
 export const WORLD_ZONES: TimeZoneConfig[] = [
@@ -26,12 +27,12 @@ export const WORLD_ZONES: TimeZoneConfig[] = [
     lon: 13.4050,
   },
   {
-    id: 'ru-omsk',
-    label: 'OMS',
-    subLabel: 'OMSK',
-    zone: 'Asia/Omsk',
-    lat: 54.9885,
-    lon: 73.3242,
+    id: 'us-dc',
+    label: 'WAS',
+    subLabel: 'WASHINGTON D.C.',
+    zone: 'America/New_York',
+    lat: 38.8951,
+    lon: -77.0364,
   },
   {
     id: 'sg',

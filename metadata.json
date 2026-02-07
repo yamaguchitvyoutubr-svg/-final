@@ -1,6 +1,6 @@
 {
   "name": "機能てんこ盛り世界時計改 Final",
-  "description": "A high-precision digital clock displaying local time alongside synchronized world times for Japan, London, Berlin, and Omsk.",
+  "description": "A high-precision digital clock displaying local time alongside synchronized world times for Japan, London, Berlin, and Washington D.C.",
   "requestFramePermissions": [
     "geolocation"
   ]

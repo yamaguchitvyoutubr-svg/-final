@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 
 // --- Types ---
@@ -187,22 +188,16 @@ export const EarthquakeWidget: React.FC = () => {
   const [testMode, setTestMode] = useState(false);
   const [activeMode, setActiveMode] = useState<DisplayMode>('EARTHQUAKE');
   
-  // Track monitoring speed (User request: 6s for Emergency)
-  const [pollingInterval, setPollingInterval] = useState<number>(30000); // Normal: 30s
+  // User request: Constant 6s for high-speed monitoring across all events
+  const [pollingInterval, setPollingInterval] = useState<number>(6000); 
   const [lastAlertTime, setLastAlertTime] = useState<string | null>(null);
 
-  // --- Dynamic Polling Logic ---
+  // --- Static Polling Logic (Now constant 6s) ---
   useEffect(() => {
-    // If EEW is active, or a significant event happened, force 6s polling for everything
-    let isEmergency = false;
-    if (eewData || (quakeData && quakeData.magnitude >= 6.0) || (tsunamiData && !tsunamiData.cancelled)) {
-      isEmergency = true;
-    }
-
     if (!testMode) {
-      setPollingInterval(isEmergency ? 6000 : 30000);
+      setPollingInterval(6000);
     }
-  }, [quakeData, tsunamiData, eewData, testMode]);
+  }, [testMode]);
 
   // --- Independent Fetchers ---
 
@@ -322,7 +317,7 @@ export const EarthquakeWidget: React.FC = () => {
       return () => clearInterval(interval);
   }, [testMode]);
 
-  // 2. Details Poller - Dynamic (Normal: 30s / Emergency: 6s)
+  // 2. Details Poller - Global 6s update interval as per user request
   useEffect(() => {
       if (testMode) return;
       const interval = setInterval(() => fetchDetails(true), pollingInterval);
@@ -494,7 +489,7 @@ export const EarthquakeWidget: React.FC = () => {
             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-sm bg-black/40 border border-slate-800">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
                 <span className="text-[9px] text-cyan-500 font-mono tracking-tighter uppercase">
-                    EEW: 6s / MON: {pollingInterval / 1000}s
+                    HIGH-SPEED: {pollingInterval / 1000}s
                 </span>
             </div>
             
