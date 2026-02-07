@@ -11,14 +11,6 @@ export const WORLD_ZONES: TimeZoneConfig[] = [
     lon: 139.6917,
   },
   {
-    id: 'uk',
-    label: 'LON',
-    subLabel: 'LONDON',
-    zone: 'Europe/London',
-    lat: 51.5074,
-    lon: -0.1278,
-  },
-  {
     id: 'de',
     label: 'BER',
     subLabel: 'BERLIN',

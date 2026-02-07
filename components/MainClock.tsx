@@ -1,133 +1,99 @@
-import React, { useMemo, useState, useEffect } from 'react';
+
+import React, { useMemo } from 'react';
 
 interface MainClockProps {
   date: Date;
 }
 
-// Side Panel Components
+const SubClock: React.FC<{ label: string; zone: string; date: Date; color: string }> = ({ label, zone, date, color }) => {
+  const time = useMemo(() => {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: zone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(date);
+  }, [date, zone]);
 
-// 1. Real Market Data (USD/JPY)
-const MarketMetrics: React.FC = () => {
-    const [rate, setRate] = useState<number | null>(null);
-    const [loading, setLoading] = useState(true);
+  return (
+    <div className="flex flex-col items-center px-6 border-x border-slate-800/50">
+      <span className={`text-[9px] tracking-[0.4em] font-bold ${color}`}>{label}</span>
+      <span className="font-digital text-xl md:text-2xl tracking-[0.15em] text-slate-300 tabular-nums">
+        {time}
+      </span>
+    </div>
+  );
+};
 
-    const fetchRate = async () => {
-        try {
-            // Using open.er-api.com (Free, No Auth, CORS supported)
-            const res = await fetch('https://open.er-api.com/v6/latest/USD');
-            const data = await res.json();
-            if (data && data.rates && data.rates.JPY) {
-                setRate(data.rates.JPY);
-            }
-            setLoading(false);
-        } catch (e) {
-            console.error("Market data fetch failed", e);
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchRate();
-        const interval = setInterval(fetchRate, 60000); // Update every minute
-        return () => clearInterval(interval);
-    }, []);
+// Digital Calendar Widget replacing SystemMonitor
+const CalendarWidget: React.FC<{ date: Date }> = ({ date }) => {
+    const month = useMemo(() => new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date).toUpperCase(), [date]);
+    const day = useMemo(() => date.getDate().toString().padStart(2, '0'), [date]);
+    const year = useMemo(() => date.getFullYear(), [date]);
+    const weekday = useMemo(() => new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(date).toUpperCase(), [date]);
 
     return (
-        <div className="hidden lg:flex flex-col items-end justify-center w-48 gap-4">
+        <div className="hidden lg:flex flex-col items-end justify-center w-48 gap-3 select-none">
             <div className="w-full text-right">
-                <div className="text-[10px] text-cyan-600 tracking-widest font-mono mb-1">MARKET DATA</div>
-                <div className="text-xs text-slate-400 font-sans tracking-wider">USD / JPY</div>
+                <div className="text-[10px] text-cyan-600 tracking-[0.4em] font-mono mb-1">DATE MODULE</div>
+                <div className="text-[9px] text-slate-500 font-sans tracking-widest uppercase">{month} / {year}</div>
             </div>
-
-            <div className="flex flex-col items-end border-r-2 border-slate-800 pr-3 py-1">
-                <div className="text-[9px] text-slate-500 tracking-widest uppercase">CURRENT RATE</div>
-                <div className="text-xl font-digital text-slate-300 tracking-widest">
-                    {loading ? (
-                        <span className="animate-pulse">---.--</span>
-                    ) : (
-                        <span className="text-white font-bold drop-shadow-[0_0_5px_rgba(255,255,255,0.2)]">
-                            {rate ? rate.toFixed(2) : 'ERR'}
-                        </span>
-                    )}
+            <div className="flex flex-col items-end border-r-2 border-slate-800 pr-3 py-1 gap-1">
+                <div className="text-5xl font-digital text-white leading-none tracking-tighter italic">
+                    {day}
+                </div>
+                <div className="text-[10px] font-digital text-cyan-500/80 tracking-[0.2em] font-bold mt-1">
+                    {weekday}
                 </div>
             </div>
-
-            <div className="flex flex-col items-end border-r-2 border-slate-800 pr-3 py-1">
-                <div className="text-[9px] text-slate-500 tracking-widest uppercase">SOURCE API</div>
-                <div className="text-xs font-mono text-cyan-600/70 tracking-tighter">
-                    OPEN.ER-API
-                </div>
+            <div className="w-full text-right opacity-30">
+                <div className="text-[8px] text-slate-500 tracking-widest">CALENDAR SYNC: L-01</div>
             </div>
         </div>
     );
 };
 
-// 2. Real Network Latency (Ping)
 const NetworkStatus: React.FC = () => {
-    const [latency, setLatency] = useState<number | null>(null);
-    const [history, setHistory] = useState<number[]>(new Array(10).fill(0));
+    const [latency, setLatency] = React.useState<number | null>(null);
+    const [history, setHistory] = React.useState<number[]>(new Array(10).fill(0));
 
-    useEffect(() => {
+    React.useEffect(() => {
         const ping = async () => {
             const start = performance.now();
             try {
-                // Change to simple GET request to root with cache busting
-                // HEAD requests can be blocked by some CDNs or server configs
-                await fetch('/?_' + Date.now(), { method: 'GET', cache: 'no-store' });
-                const end = performance.now();
-                const ms = Math.round(end - start);
-                
+                await fetch('/?_ping=' + Date.now(), { method: 'GET', cache: 'no-store' });
+                const ms = Math.round(performance.now() - start);
                 setLatency(ms);
                 setHistory(prev => [...prev.slice(1), ms]);
             } catch (e) {
-                setLatency(null); // Error state
+                setLatency(null);
             }
         };
-
-        // Initial ping
         ping();
-        const interval = setInterval(ping, 5000); // Ping every 5 seconds
+        const interval = setInterval(ping, 5000);
         return () => clearInterval(interval);
     }, []);
-
-    // Normalize height for the graph (max 100ms for visual scaling)
-    const getBarHeight = (ms: number) => {
-        return Math.min(Math.max((ms / 100) * 100, 10), 100);
-    };
 
     return (
         <div className="hidden lg:flex flex-col items-start justify-center w-48 gap-4">
             <div className="w-full">
-                <div className="text-[10px] text-cyan-600 tracking-widest font-mono mb-1 text-left">NETWORK LATENCY</div>
-                {/* Visualizer Graph */}
+                <div className="text-[10px] text-cyan-600 tracking-widest font-mono mb-1">NETWORK LATENCY</div>
                 <div className="flex items-end gap-1 h-6 w-full opacity-70">
                     {history.map((ms, i) => (
-                        <div 
-                            key={i} 
-                            className={`flex-1 border-t transition-all duration-300 ${ms > 150 ? 'bg-red-900/40 border-red-500/50' : 'bg-cyan-900/40 border-cyan-500/50'}`} 
-                            style={{ height: `${getBarHeight(ms)}%` }}
-                        ></div>
+                        <div key={i} className={`flex-1 border-t ${ms > 150 ? 'bg-red-900/40 border-red-500/50' : 'bg-cyan-900/40 border-cyan-500/50'}`} style={{ height: `${Math.min(Math.max((ms / 100) * 100, 10), 100)}%` }}></div>
                     ))}
                 </div>
             </div>
-
             <div className="flex flex-col items-start border-l-2 border-slate-800 pl-3 py-1">
-                <div className="text-[9px] text-slate-500 tracking-widest uppercase">PING (RTT)</div>
+                <div className="text-[9px] text-slate-500 tracking-widest uppercase">Ping (RTT)</div>
                 <div className={`text-xl font-digital tracking-widest font-mono ${latency === null ? 'text-red-500' : 'text-cyan-400'}`}>
                     {latency !== null ? `${latency}ms` : 'OFFLINE'}
-                </div>
-            </div>
-
-            <div className="flex flex-col items-start border-l-2 border-slate-800 pl-3 py-1">
-                <div className="text-[9px] text-slate-500 tracking-widest uppercase">STATUS</div>
-                <div className="text-xs font-mono text-slate-400 tracking-widest">
-                    {latency === null ? 'DISCONNECTED' : 'CONNECTED'}
                 </div>
             </div>
         </div>
     );
 };
-
 
 export const MainClock: React.FC<MainClockProps> = ({ date }) => {
   const timeString = useMemo(() => {
@@ -139,45 +105,28 @@ export const MainClock: React.FC<MainClockProps> = ({ date }) => {
     }).format(date);
   }, [date]);
 
-  const dateString = useMemo(() => {
-    // Format: NOVEMBER 22, 2025 (SAT)
-    const datePart = new Intl.DateTimeFormat('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }).format(date);
-    
-    const dayPart = new Intl.DateTimeFormat('en-US', {
-        weekday: 'short'
-    }).format(date).toUpperCase();
-
-    return `${datePart.toUpperCase()} (${dayPart})`;
-  }, [date]);
-
   return (
-    <div className="flex items-center justify-center w-full max-w-[90%] gap-8 lg:gap-16">
-        {/* Left Side: Market Data */}
-        <MarketMetrics />
+    <div className="flex items-center justify-center w-full max-w-[95%] gap-4 lg:gap-16">
+        <CalendarWidget date={date} />
 
-        {/* Center: Main Clock */}
-        <div className="flex flex-col items-center select-none z-10">
-            <div className="text-slate-400 text-base md:text-lg mb-2 font-light tracking-wider opacity-80">
-                CURRENT TIME
+        <div className="flex flex-col items-center select-none z-10 flex-1">
+            <div className="text-slate-500 text-[10px] md:text-xs mb-4 font-bold tracking-[0.6em] uppercase opacity-40">
+                Primary Chronometer
             </div>
             
-            <div className="font-digital text-7xl md:text-[8rem] leading-none tracking-widest text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.15)] tabular-nums font-bold italic relative">
-                {/* Decorative brackets */}
-                <span className="hidden md:inline-block absolute -left-8 top-1/2 -translate-y-1/2 text-slate-800 text-6xl font-thin opacity-50">[</span>
+            <div className="font-digital text-7xl md:text-[8rem] leading-none tracking-widest text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.15)] tabular-nums font-bold italic relative px-10">
+                <span className="hidden md:inline-block absolute left-0 top-1/2 -translate-y-1/2 text-slate-800 text-6xl font-thin opacity-50 select-none">[</span>
                 {timeString}
-                <span className="hidden md:inline-block absolute -right-8 top-1/2 -translate-y-1/2 text-slate-800 text-6xl font-thin opacity-50">]</span>
+                <span className="hidden md:inline-block absolute right-0 top-1/2 -translate-y-1/2 text-slate-800 text-6xl font-thin opacity-50 select-none">]</span>
             </div>
-            
-            <div className="mt-4 text-slate-400 text-lg md:text-xl font-light tracking-[0.2em] uppercase border-b border-slate-800 pb-2 px-8">
-                {dateString}
+
+            <div className="mt-8 animate-[fadeIn_0.5s_ease-out]">
+                <SubClock label="LONDON / UTC" zone="Europe/London" date={date} color="text-cyan-500/80" />
             </div>
+
+            <div className="mt-4 w-32 h-[1px] bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
         </div>
 
-        {/* Right Side: Network Status */}
         <NetworkStatus />
     </div>
   );
