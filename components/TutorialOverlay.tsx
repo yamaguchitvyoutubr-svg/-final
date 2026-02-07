@@ -24,7 +24,7 @@ const STEPS = [
     title: "ENVIRONMENTAL SENSORS",
     content: (
         <ul className="list-disc list-inside space-y-2 text-slate-300">
-            <li><strong className="text-cyan-400">Weather Sensor:</strong> Shows local conditions. Refresh manually via the coordinate display or wait for the 15m auto-sync.</li>
+            <li><strong className="text-cyan-400">Weather Sensor:</strong> Shows local conditions. Data for all monitors and world cities is synchronized every 15 minutes. Check the <span className="text-cyan-500 font-mono">SYNC</span> timestamp for data freshness.</li>
             <li><strong className="text-cyan-400">Disaster Monitor:</strong> Real-time Seismic & Tsunami data. High-speed polling (6s) is active for maximum safety. Use <span className="text-xs border border-slate-600 px-1 rounded">TEST</span> to simulate emergency events.</li>
         </ul>
     )
@@ -45,7 +45,7 @@ const STEPS = [
             <li><strong className="text-cyan-400">Audio Terminal:</strong> Import and play local MP3 files directly from your device. Supports playlists and background playback.</li>
             <li><strong className="text-cyan-400">AI Comm Link:</strong> Consult the System Operator (Gemini AI) for data analysis or assistance.</li>
             <li><strong className="text-cyan-400">Display Config:</strong> Use the grid icon to toggle visibility of specific modules for a cleaner interface.</li>
-            <li><strong className="text-cyan-400">Visuals:</strong> Customize the dashboard by uploading local image assets as background textures.</li>
+            <li><strong className="text-cyan-400">Visuals:</strong> Customize the dashboard by uploading local image or video (<span className="text-cyan-400">.mp4 / .mov</span>) assets as background textures.</li>
         </ul>
     )
   }

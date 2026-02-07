@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { getWeatherLabel } from '../utils/weatherUtils';
 
@@ -12,6 +13,7 @@ export const WeatherWidget: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{lat: number, lon: number} | null>(null);
   const [testMode, setTestMode] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   
   // Search State
   const [isSearching, setIsSearching] = useState(false);
@@ -28,6 +30,7 @@ export const WeatherWidget: React.FC = () => {
             temperature: data.current.temperature_2m,
             weatherCode: data.current.weather_code
           });
+          setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
           setError(null);
         } else {
           console.warn('Weather data missing structure:', data);
@@ -90,7 +93,7 @@ export const WeatherWidget: React.FC = () => {
     }
 
     const geoOptions = {
-        enableHighAccuracy: false, // Set false for better compatibility/speed on mobile
+        enableHighAccuracy: false, 
         timeout: 10000,
         maximumAge: 60000
     };
@@ -152,7 +155,10 @@ export const WeatherWidget: React.FC = () => {
     <div className="flex flex-col items-center mt-6 animate-[fadeIn_1s_ease-out] w-full max-w-2xl relative">
       
       {/* Controls Container */}
-      <div className="w-full flex justify-end items-center gap-2 mb-1 px-1">
+      <div className="w-full flex justify-between items-center px-1 mb-1">
+        <div className="text-[9px] text-slate-600 tracking-widest uppercase font-mono">
+            {lastUpdated && `SYNC: ${lastUpdated}`}
+        </div>
         <button 
             onClick={() => setTestMode(!testMode)}
             className={`text-[10px] tracking-widest px-2 py-0.5 border rounded-sm transition-colors ${testMode ? 'bg-orange-900/50 border-orange-500 text-orange-200' : 'border-slate-800 text-slate-600 hover:text-slate-400'}`}

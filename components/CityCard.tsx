@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { TimeZoneConfig } from '../types';
 import { getWeatherLabel } from '../utils/weatherUtils';
@@ -9,6 +10,7 @@ interface CityCardProps {
 
 export const CityCard: React.FC<CityCardProps> = ({ config, baseDate }) => {
   const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   // Time calculation logic
   const { time, dateDiff } = useMemo(() => {
@@ -69,6 +71,7 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate }) => {
             temp: data.current.temperature_2m,
             code: data.current.weather_code,
           });
+          setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         }
       } catch (error) {
         // Silently fail for individual cards to keep UI clean
@@ -77,8 +80,8 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate }) => {
     };
 
     fetchWeather();
-    // Refresh weather every 30 minutes
-    const intervalId = setInterval(fetchWeather, 30 * 60 * 1000);
+    // Refresh weather every 15 minutes as requested
+    const intervalId = setInterval(fetchWeather, 15 * 60 * 1000);
     return () => clearInterval(intervalId);
   }, [config.lat, config.lon, config.label]);
 
@@ -98,11 +101,18 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate }) => {
             <h3 className="text-slate-300 font-sans font-bold text-base tracking-wider leading-none">
                 {config.label}
             </h3>
-            {config.subLabel && (
-                <span className="text-[9px] text-slate-600 tracking-widest mt-0.5 font-mono">
-                    {config.subLabel}
-                </span>
-            )}
+            <div className="flex flex-col gap-0.5 mt-0.5">
+                {config.subLabel && (
+                    <span className="text-[9px] text-slate-600 tracking-widest font-mono">
+                        {config.subLabel}
+                    </span>
+                )}
+                {lastUpdated && (
+                    <span className="text-[7px] text-slate-700 font-mono tracking-tighter uppercase">
+                        SYNC: {lastUpdated}
+                    </span>
+                )}
+            </div>
         </div>
         
         {/* Weather Info (Mini) */}

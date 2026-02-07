@@ -10,6 +10,11 @@ import { LocalMusicPlayer } from './components/LocalMusicPlayer';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { useClock } from './hooks/useClock';
 
+interface BackgroundAsset {
+  url: string;
+  type: 'image' | 'video';
+}
+
 const playTimeSignal = () => {
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -36,13 +41,15 @@ const playTimeSignal = () => {
 
 const App: React.FC = () => {
   const { date } = useClock();
-  const [bgImages, setBgImages] = useState<string[]>([]);
+  const [bgAssets, setBgAssets] = useState<BackgroundAsset[]>([]);
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
   const [isSignalEnabled, setIsSignalEnabled] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMusicOpen, setIsMusicOpen] = useState(false);
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [bgVolume, setBgVolume] = useState(0.5);
+  const [isBgMuted, setIsBgMuted] = useState(false);
   
   // Visibility States for Modules
   const [visibility, setVisibility] = useState({
@@ -54,6 +61,7 @@ const App: React.FC = () => {
 
   const lastSignalHourRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const hasSeen = localStorage.getItem('hasSeenTutorial');
@@ -72,16 +80,23 @@ const App: React.FC = () => {
   }, [visibility]);
 
   useEffect(() => {
-    if (bgImages.length <= 1) return;
+    if (bgAssets.length <= 1) return;
     const interval = setInterval(() => {
-      setCurrentBgIndex((prev) => (prev + 1) % bgImages.length);
+      setCurrentBgIndex((prev) => (prev + 1) % bgAssets.length);
     }, 60000);
     return () => clearInterval(interval);
-  }, [bgImages]);
+  }, [bgAssets]);
 
   useEffect(() => {
-    return () => bgImages.forEach(url => URL.revokeObjectURL(url));
-  }, [bgImages]);
+    return () => bgAssets.forEach(asset => URL.revokeObjectURL(asset.url));
+  }, [bgAssets]);
+
+  // Sync video volume
+  useEffect(() => {
+    if (videoRef.current) {
+        videoRef.current.volume = isBgMuted ? 0 : bgVolume;
+    }
+  }, [bgVolume, isBgMuted, currentBgIndex]);
 
   useEffect(() => {
     if (!isSignalEnabled) return;
@@ -95,9 +110,15 @@ const App: React.FC = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
-      bgImages.forEach(url => URL.revokeObjectURL(url));
-      const newUrls = Array.from(files).map(file => URL.createObjectURL(file as Blob));
-      setBgImages(newUrls);
+      bgAssets.forEach(asset => URL.revokeObjectURL(asset.url));
+      const newAssets: BackgroundAsset[] = Array.from(files).map((file: File) => {
+        const type = (file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mov')) ? 'video' : 'image';
+        return {
+          url: URL.createObjectURL(file as Blob),
+          type: type as 'image' | 'video'
+        };
+      });
+      setBgAssets(newAssets);
       setCurrentBgIndex(0);
     }
   };
@@ -107,14 +128,33 @@ const App: React.FC = () => {
   };
 
   const triggerFileInput = () => fileInputRef.current?.click();
-  const currentBg = bgImages[currentBgIndex] || null;
+  const currentAsset = bgAssets[currentBgIndex] || null;
 
   return (
-    <div 
-      className="min-h-screen bg-black text-slate-200 flex flex-col items-center p-4 md:p-8 relative overflow-y-auto overflow-x-hidden font-sans transition-all duration-700 bg-cover bg-center bg-no-repeat"
-      style={currentBg ? { backgroundImage: `url(${currentBg})` } : {}}
-    >
-      <div className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 ${currentBg ? 'bg-black/75' : 'bg-black'}`} />
+    <div className="min-h-screen bg-black text-slate-200 flex flex-col items-center p-4 md:p-8 relative overflow-y-auto overflow-x-hidden font-sans transition-all duration-700">
+      
+      {/* Background Layer */}
+      {currentAsset && (
+        <div className="fixed inset-0 z-0">
+          {currentAsset.type === 'video' ? (
+            <video 
+              ref={videoRef}
+              key={currentAsset.url}
+              src={currentAsset.url} 
+              autoPlay 
+              loop 
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div 
+              className="w-full h-full bg-cover bg-center bg-no-repeat"
+              style={{ backgroundImage: `url(${currentAsset.url})` }}
+            />
+          )}
+          <div className="absolute inset-0 bg-black/75 transition-opacity duration-1000" />
+        </div>
+      )}
       
       {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
 
@@ -153,7 +193,7 @@ const App: React.FC = () => {
 
       {/* Display Control Menu */}
       {isDisplaySettingsOpen && (
-        <div className="fixed bottom-24 right-6 bg-black/90 border border-slate-700 p-4 rounded-sm z-[60] shadow-2xl animate-[slideIn_0.2s_ease-out] w-56">
+        <div className="fixed bottom-24 right-6 bg-black/90 border border-slate-700 p-4 rounded-sm z-[60] shadow-2xl animate-[slideIn_0.2s_ease-out] w-64">
             <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 border-b border-slate-800 pb-1">MODULE DISPLAY CONFIG</h4>
             <div className="flex flex-col gap-3">
                 {Object.entries({
@@ -172,6 +212,40 @@ const App: React.FC = () => {
                         <span className={`text-[10px] tracking-widest ${visibility[key as keyof typeof visibility] ? 'text-slate-200' : 'text-slate-600'}`}>{label}</span>
                     </label>
                 ))}
+            </div>
+
+            {/* Background Audio Settings */}
+            <div className="mt-6 pt-4 border-t border-slate-800">
+                <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3">BACKGROUND AUDIO</h4>
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-2">
+                        <button 
+                            onClick={() => setIsBgMuted(!isBgMuted)}
+                            className={`p-1.5 border rounded-sm transition-all ${isBgMuted ? 'border-red-500 text-red-500 bg-red-950/20' : 'border-slate-700 text-slate-400 hover:text-cyan-400'}`}
+                        >
+                            {isBgMuted ? (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                            ) : (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                            )}
+                        </button>
+                        <input 
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={bgVolume}
+                            onChange={(e) => setBgVolume(parseFloat(e.target.value))}
+                            className="flex-1 h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500"
+                        />
+                        <span className="text-[10px] font-digital text-slate-500 w-8 text-right">
+                            {Math.round(bgVolume * 100)}%
+                        </span>
+                    </div>
+                    <div className="text-[8px] text-slate-700 font-mono tracking-tighter uppercase">
+                        * Browser interaction required for autoplay sound
+                    </div>
+                </div>
             </div>
         </div>
       )}
@@ -219,12 +293,12 @@ const App: React.FC = () => {
 
         <button
           onClick={triggerFileInput}
-          className={`text-slate-400 hover:text-white p-3 rounded-full border transition-all duration-300 outline-none ${bgImages.length > 1 ? 'bg-cyan-900/50 border-cyan-500 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.5)]' : 'bg-gray-900/80 border-slate-700 hover:border-cyan-500'}`}
-          title="Background Upload"
+          className={`text-slate-400 hover:text-white p-3 rounded-full border transition-all duration-300 outline-none ${bgAssets.length > 0 ? 'bg-cyan-900/50 border-cyan-500 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.5)]' : 'bg-gray-900/80 border-slate-700 hover:border-cyan-500'}`}
+          title="Background Upload (Images/Video)"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
         </button>
-        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
+        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,video/mp4,video/quicktime,.mov" multiple className="hidden" />
       </div>
     </div>
   );
