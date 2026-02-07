@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 
 interface TutorialOverlayProps {
@@ -7,47 +8,44 @@ interface TutorialOverlayProps {
 const STEPS = [
   {
     title: "SYSTEM INITIALIZED",
-    content: "Welcome to the World Chronometer Dashboard. This system provides high-precision timekeeping, real-time disaster monitoring, and AI assistance. Click 'NEXT' to review operational procedures."
+    content: "Welcome to the World Chronometer Dashboard. This system provides high-precision timekeeping, real-time disaster monitoring, and local asset management. Click 'NEXT' to review operational procedures."
   },
   {
-    title: "TOP SECTOR: SENSORS",
+    title: "TOP SECTOR: CHRONOMETRY",
     content: (
         <ul className="list-disc list-inside space-y-2 text-slate-300">
-            <li><strong className="text-cyan-400">Main Clock:</strong> Displays local time with atomic precision.</li>
-            <li><strong className="text-cyan-400">Weather:</strong> Shows local conditions. Updates every 15m. Use the <span className="text-xs border border-slate-600 px-1 rounded">↻</span> button to force refresh.</li>
-            <li><strong className="text-cyan-400">Disaster Monitor:</strong> Real-time Seismic & Tsunami data. Polls every 30s (normal) or 6s (emergency). Use <span className="text-xs border border-slate-600 px-1 rounded">TEST SYSTEM</span> to simulate alerts.</li>
+            <li><strong className="text-cyan-400">Main Clock:</strong> Displays local time with atomic precision. Brackets indicate active synchronization.</li>
+            <li><strong className="text-cyan-400">Date Module:</strong> A dedicated calendar unit showing current Month, Year, Day, and Weekday.</li>
+            <li><strong className="text-cyan-400">UTC Monitor:</strong> Secondary chronometer displaying London/Standard time for global coordination.</li>
         </ul>
     )
   },
   {
-    title: "MID SECTOR: CHRONOGRAPH",
+    title: "ENVIRONMENTAL SENSORS",
     content: (
         <ul className="list-disc list-inside space-y-2 text-slate-300">
-            <li><strong className="text-cyan-400">Modes:</strong> Switch between TIMER (countdown) and STOPWATCH (count-up) using the tabs.</li>
-            <li><strong className="text-cyan-400">Background Op:</strong> Timing continues accurately even when the tab is inactive.</li>
-            <li><strong className="text-cyan-400">Alarm:</strong> Emits a sequential beep pattern upon completion.</li>
+            <li><strong className="text-cyan-400">Weather Sensor:</strong> Shows local conditions. Refresh manually via the coordinate display or wait for the 15m auto-sync.</li>
+            <li><strong className="text-cyan-400">Disaster Monitor:</strong> Real-time Seismic & Tsunami data. High-speed polling (6s) is active for maximum safety. Use <span className="text-xs border border-slate-600 px-1 rounded">TEST</span> to simulate emergency events.</li>
         </ul>
     )
   },
   {
-    title: "BOTTOM SECTOR: WORLD GRID",
+    title: "UTILITIES & GRID",
     content: (
-        <div className="space-y-2 text-slate-300">
-            <p>Monitors 5 strategic locations: <span className="text-white">TOKYO, LONDON, BERLIN, OMSK, SINGAPORE</span>.</p>
-            <p>Cards display local time, date offset, and current weather.</p>
-            <p className="text-red-400 text-xs mt-2 border border-red-900/50 bg-red-950/20 p-2 rounded">
-                ⚠ ALERT: Any location experiencing severe weather (Thunderstorms, etc.) will be highlighted in RED.
-            </p>
-        </div>
+        <ul className="list-disc list-inside space-y-2 text-slate-300">
+            <li><strong className="text-cyan-400">Chronograph:</strong> Toggle between TIMER and STOPWATCH. Operation continues accurately in background sessions.</li>
+            <li><strong className="text-cyan-400">World Grid:</strong> Monitors TYO, BER, WAS, and SGP. Highlights in <span className="text-red-500">RED</span> if severe weather is detected at the target coordinate.</li>
+        </ul>
     )
   },
   {
-    title: "COMMAND DECK",
+    title: "COMMAND DECK: LOCAL ASSETS",
     content: (
         <ul className="list-disc list-inside space-y-2 text-slate-300">
-            <li><strong className="text-cyan-400">AI Comm Link:</strong> Open the chat window to consult with the System Operator (Gemini AI).</li>
-            <li><strong className="text-cyan-400">Time Signal:</strong> Toggle the hourly chime (activates at 00m 00s).</li>
-            <li><strong className="text-cyan-400">Visuals:</strong> Upload a custom background image via the folder icon.</li>
+            <li><strong className="text-cyan-400">Audio Terminal:</strong> Import and play local MP3 files directly from your device. Supports playlists and background playback.</li>
+            <li><strong className="text-cyan-400">AI Comm Link:</strong> Consult the System Operator (Gemini AI) for data analysis or assistance.</li>
+            <li><strong className="text-cyan-400">Display Config:</strong> Use the grid icon to toggle visibility of specific modules for a cleaner interface.</li>
+            <li><strong className="text-cyan-400">Visuals:</strong> Customize the dashboard by uploading local image assets as background textures.</li>
         </ul>
     )
   }
@@ -99,7 +97,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ onClose }) => 
 
         {/* Header */}
         <div className="bg-cyan-950/50 p-3 border-b border-cyan-900 flex justify-between items-center">
-            <h2 className="text-cyan-400 font-digital tracking-widest font-bold text-lg">MANUAL</h2>
+            <h2 className="text-cyan-400 font-digital tracking-widest font-bold text-lg">OPERATIONAL MANUAL</h2>
             <div className="flex gap-1">
                 {STEPS.map((_, idx) => (
                     <div key={idx} className={`h-1.5 w-6 skew-x-[-20deg] ${idx === currentStep ? 'bg-cyan-400' : idx < currentStep ? 'bg-cyan-800' : 'bg-slate-800'}`}></div>
@@ -108,7 +106,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ onClose }) => 
         </div>
 
         {/* Content */}
-        <div className="p-6 min-h-[200px] flex flex-col justify-center">
+        <div className="p-6 min-h-[220px] flex flex-col justify-center">
             <h3 className="text-white font-sans font-bold tracking-widest text-xl mb-4 border-l-4 border-cyan-500 pl-3">
                 {step.title}
             </h3>
@@ -137,7 +135,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ onClose }) => 
                 </label>
 
                 <div className="text-[10px] text-slate-600 font-mono">
-                    PAGE {currentStep + 1}/{STEPS.length}
+                    PROCEDURE {currentStep + 1}/{STEPS.length}
                 </div>
             </div>
 
@@ -155,7 +153,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ onClose }) => 
                     onClick={handleNext}
                     className="px-6 py-2 bg-cyan-900/30 border border-cyan-600 text-cyan-400 hover:bg-cyan-800/40 hover:text-cyan-200 text-xs tracking-widest font-bold transition-all shadow-[0_0_10px_rgba(6,182,212,0.1)] hover:shadow-[0_0_15px_rgba(6,182,212,0.3)]"
                 >
-                    {currentStep === STEPS.length - 1 ? "CLOSE MANUAL" : "NEXT PAGE"}
+                    {currentStep === STEPS.length - 1 ? "ACKNOWLEDGE & CLOSE" : "NEXT PROCEDURE"}
                 </button>
             </div>
         </div>
