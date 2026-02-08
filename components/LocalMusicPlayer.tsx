@@ -13,7 +13,9 @@ interface Track {
   isSystem?: boolean;
 }
 
-const getDriveUrl = (id: string) => `https://docs.google.com/uc?export=download&id=${id}`;
+// Google Driveの共有URLを直接再生可能なリンクに変換
+// docs.google.com ではなく drive.google.com を使用
+const getDriveUrl = (id: string) => `https://drive.google.com/uc?id=${id}`;
 
 const SYSTEM_DRIVE_TRACK: Track = {
     id: 'drive-asset-01',
@@ -39,19 +41,27 @@ export const LocalMusicPlayer: React.FC<LocalMusicPlayerProps> = ({ isOpen, onCl
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    
     const handleEnded = () => tracks.length > 1 ? handleNext() : setIsPlaying(false);
+    
     const handleError = (e: any) => {
         console.error("Audio Load Error:", e);
-        setErrorMsg("LOAD FAILED: GOOGLE DRIVE SECURITY BLOCK OR NO SUPPORTED SOURCE.");
+        // 403エラーやCORSエラーが起きた際のアドバイスを表示
+        if (currentTrack?.isSystem) {
+            setErrorMsg("DRIVE ERROR: CHECK IF THE FILE IS SHARED TO 'ANYONE WITH THE LINK'.");
+        } else {
+            setErrorMsg("LOAD FAILED: UNSUPPORTED FORMAT OR ACCESS DENIED.");
+        }
         setIsPlaying(false);
     };
+
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('error', handleError);
     return () => {
         audio.removeEventListener('ended', handleEnded);
         audio.removeEventListener('error', handleError);
     };
-  }, [tracks, currentIndex]);
+  }, [tracks, currentIndex, currentTrack]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -62,9 +72,15 @@ export const LocalMusicPlayer: React.FC<LocalMusicPlayerProps> = ({ isOpen, onCl
     if (!audio || !currentTrack) return;
 
     if (isPlaying) {
+      // プレイ開始前にエラーをクリア
+      setErrorMsg(null);
       audio.play().catch(e => {
         console.warn("Playback blocked or failed.", e);
-        setErrorMsg("PLAYBACK BLOCKED: CLICK THE START BUTTON ON SCREEN FIRST.");
+        if (e.name === 'NotAllowedError') {
+            setErrorMsg("PLAYBACK BLOCKED: CLICK THE 'INITIALIZE SYSTEM' BUTTON.");
+        } else {
+            setErrorMsg("AUDIO STREAM ERROR. TRY RELOADING.");
+        }
         setIsPlaying(false);
       });
     } else {
@@ -86,7 +102,6 @@ export const LocalMusicPlayer: React.FC<LocalMusicPlayerProps> = ({ isOpen, onCl
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    // Fix: Explicitly type 'file' as 'File' to resolve 'unknown' type error in map function
     const newTracks: Track[] = Array.from(files).map((file: File, idx: number) => ({
       id: `${Date.now()}-${idx}`,
       name: file.name.replace(/\.[^/.]+$/, "").toUpperCase(),
@@ -99,12 +114,13 @@ export const LocalMusicPlayer: React.FC<LocalMusicPlayerProps> = ({ isOpen, onCl
     setErrorMsg(null);
     setCurrentIndex(index);
     setIsPlaying(true);
+    // ブラウザの負荷分散のため、少し遅延させてロード
     setTimeout(() => {
       if (audioRef.current) {
         audioRef.current.load();
         audioRef.current.play().catch(() => {});
       }
-    }, 100);
+    }, 200);
   };
 
   const handleNext = () => handlePlayTrack((currentIndex + 1) % tracks.length);
@@ -127,7 +143,7 @@ export const LocalMusicPlayer: React.FC<LocalMusicPlayerProps> = ({ isOpen, onCl
       <div className="flex flex-col gap-4">
         <div className="bg-slate-900/50 p-3 border border-slate-800 rounded-sm">
             <div className="text-[9px] text-slate-500 tracking-widest mb-1">CURRENT BROADCAST</div>
-            <div className={`text-xs font-mono truncate h-4 tracking-wider ${errorMsg ? 'text-red-500' : 'text-cyan-200'}`}>
+            <div className={`text-xs font-mono h-auto min-h-[1rem] tracking-wider break-words ${errorMsg ? 'text-red-500' : 'text-cyan-200'}`}>
                 {errorMsg || (currentTrack ? currentTrack.name : "NO SIGNAL")}
             </div>
             
@@ -162,9 +178,21 @@ export const LocalMusicPlayer: React.FC<LocalMusicPlayerProps> = ({ isOpen, onCl
             ))}
         </div>
 
-        <audio ref={audioRef} src={currentTrack?.url || ""} crossOrigin="anonymous" preload="auto" hidden />
+        {/* 
+            CRITICAL FIX: Removed crossOrigin="anonymous". 
+            Google Drive does not send CORS headers for direct file access.
+            By removing this, the browser will play it as a "no-cors" resource.
+        */}
+        <audio ref={audioRef} src={currentTrack?.url || ""} preload="auto" hidden />
+        
         <button onClick={() => fileInputRef.current?.click()} className="w-full bg-cyan-900/20 border border-cyan-800/50 text-cyan-400 py-2 text-[10px] font-bold hover:bg-cyan-900/40 transition-all">IMPORT LOCAL ASSETS</button>
         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="audio/*" multiple hidden />
+        
+        {currentTrack?.isSystem && (
+            <div className="text-[8px] text-slate-600 font-sans leading-tight mt-1">
+                * SYSTEM PRESET IS HOSTED ON GOOGLE DRIVE. ENSURE THE FILE IS SHARED PUBLICLY.
+            </div>
+        )}
       </div>
     </div>
   );
