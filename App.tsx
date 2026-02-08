@@ -5,7 +5,6 @@ import { WorldGrid } from './components/WorldGrid';
 import { Timer } from './components/Timer';
 import { WeatherWidget } from './components/WeatherWidget';
 import { EarthquakeWidget } from './components/EarthquakeWidget';
-import { ChatWidget } from './components/ChatWidget';
 import { LocalMusicPlayer } from './components/LocalMusicPlayer';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { useClock } from './hooks/useClock';
@@ -44,7 +43,6 @@ const App: React.FC = () => {
   const [bgAssets, setBgAssets] = useState<BackgroundAsset[]>([]);
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
   const [isSignalEnabled, setIsSignalEnabled] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMusicOpen, setIsMusicOpen] = useState(false);
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -188,7 +186,6 @@ const App: React.FC = () => {
         )}
       </main>
       
-      <ChatWidget isOpen={isChatOpen} />
       <LocalMusicPlayer isOpen={isMusicOpen} onClose={() => setIsMusicOpen(false)} />
 
       {/* Display Control Menu */}
@@ -273,14 +270,6 @@ const App: React.FC = () => {
           title="Local Music Player"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
-        </button>
-
-        <button
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className={`text-slate-400 hover:text-white p-3 rounded-full border transition-all duration-300 outline-none ${isChatOpen ? 'bg-cyan-900/50 border-cyan-500 text-cyan-200 shadow-[0_0_10px_rgba(6,182,212,0.5)]' : 'bg-gray-900/80 border-slate-700 hover:border-cyan-500'}`}
-          title="AI Chat"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
         </button>
 
         <button

@@ -43,9 +43,8 @@ const STEPS = [
     content: (
         <ul className="list-disc list-inside space-y-2 text-slate-300">
             <li><strong className="text-cyan-400">Audio Terminal:</strong> Import and play local MP3 files directly from your device. Supports playlists and background playback.</li>
-            <li><strong className="text-cyan-400">AI Comm Link:</strong> Consult the System Operator (Gemini AI) for data analysis or assistance.</li>
             <li><strong className="text-cyan-400">Display Config:</strong> Use the grid icon to toggle visibility of specific modules for a cleaner interface.</li>
-            <li><strong className="text-cyan-400">Visuals:</strong> Customize the dashboard by uploading local image or video (<span className="text-cyan-400">.mp4 / .mov</span>) assets as background textures.</li>
+            <li><strong className="text-cyan-400">Visuals:</strong> Customize the dashboard by uploading local image or video (<span className="text-cyan-400">.mp4 / .mov</span>) assets as background textures. Audio from video files can be controlled via Display Settings.</li>
         </ul>
     )
   }
