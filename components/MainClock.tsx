@@ -17,16 +17,16 @@ const SubClock: React.FC<{ label: string; zone: string; date: Date; color: strin
   }, [date, zone]);
 
   return (
-    <div className="flex flex-col items-center px-6 border-x border-slate-800/50">
-      <span className={`text-[9px] tracking-[0.4em] font-bold ${color}`}>{label}</span>
-      <span className="font-digital text-xl md:text-2xl tracking-[0.15em] text-slate-300 tabular-nums">
+    <div className="flex flex-col items-center px-10 border-x border-slate-800/30">
+      <span className={`text-[10px] tracking-[0.4em] font-bold ${color}`}>{label}</span>
+      <span className="font-digital text-xl md:text-3xl tracking-[0.15em] text-slate-300 tabular-nums">
         {time}
       </span>
     </div>
   );
 };
 
-// Digital Calendar Widget replacing SystemMonitor
+// Digital Calendar Widget
 const CalendarWidget: React.FC<{ date: Date }> = ({ date }) => {
     const month = useMemo(() => new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date).toUpperCase(), [date]);
     const day = useMemo(() => date.getDate().toString().padStart(2, '0'), [date]);
@@ -46,9 +46,6 @@ const CalendarWidget: React.FC<{ date: Date }> = ({ date }) => {
                 <div className="text-[10px] font-digital text-cyan-500/80 tracking-[0.2em] font-bold mt-1">
                     {weekday}
                 </div>
-            </div>
-            <div className="w-full text-right opacity-30">
-                <div className="text-[8px] text-slate-500 tracking-widest">CALENDAR SYNC: L-01</div>
             </div>
         </div>
     );
@@ -86,7 +83,6 @@ const NetworkStatus: React.FC = () => {
                 </div>
             </div>
             <div className="flex flex-col items-start border-l-2 border-slate-800 pl-3 py-1">
-                <div className="text-[9px] text-slate-500 tracking-widest uppercase">Ping (RTT)</div>
                 <div className={`text-xl font-digital tracking-widest font-mono ${latency === null ? 'text-red-500' : 'text-cyan-400'}`}>
                     {latency !== null ? `${latency}ms` : 'OFFLINE'}
                 </div>
@@ -120,11 +116,11 @@ export const MainClock: React.FC<MainClockProps> = ({ date }) => {
                 <span className="hidden md:inline-block absolute right-0 top-1/2 -translate-y-1/2 text-slate-800 text-6xl font-thin opacity-50 select-none">]</span>
             </div>
 
-            <div className="mt-8 animate-[fadeIn_0.5s_ease-out]">
+            <div className="mt-8 flex justify-center animate-[fadeIn_0.5s_ease-out]">
                 <SubClock label="LONDON / UTC" zone="Europe/London" date={date} color="text-cyan-500/80" />
             </div>
 
-            <div className="mt-4 w-32 h-[1px] bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
+            <div className="mt-6 w-48 h-[1px] bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
         </div>
 
         <NetworkStatus />
