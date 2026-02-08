@@ -17,16 +17,15 @@ const SubClock: React.FC<{ label: string; zone: string; date: Date; color: strin
   }, [date, zone]);
 
   return (
-    <div className="flex flex-col items-center px-10 border-x border-slate-800/30">
-      <span className={`text-[10px] tracking-[0.4em] font-bold ${color}`}>{label}</span>
-      <span className="font-digital text-xl md:text-3xl tracking-[0.15em] text-slate-300 tabular-nums">
+    <div className="flex flex-col items-center px-8 border-x border-slate-800/20">
+      <span className={`text-[10px] tracking-[0.5em] font-bold ${color} mb-1 opacity-70`}>{label}</span>
+      <span className="font-digital text-2xl md:text-5xl tracking-[0.1em] text-slate-300 tabular-nums font-medium">
         {time}
       </span>
     </div>
   );
 };
 
-// Digital Calendar Widget
 const CalendarWidget: React.FC<{ date: Date }> = ({ date }) => {
     const month = useMemo(() => new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date).toUpperCase(), [date]);
     const day = useMemo(() => date.getDate().toString().padStart(2, '0'), [date]);
@@ -102,28 +101,31 @@ export const MainClock: React.FC<MainClockProps> = ({ date }) => {
   }, [date]);
 
   return (
-    <div className="flex items-center justify-center w-full max-w-[95%] gap-4 lg:gap-16">
-        <CalendarWidget date={date} />
+    <div className="flex items-center justify-center w-full max-w-[95%] gap-4 lg:gap-16 flex-col animate-[fadeIn_1s_ease-out]">
+        
+        <div className="flex items-center justify-center w-full gap-4 lg:gap-16">
+            <CalendarWidget date={date} />
 
-        <div className="flex flex-col items-center select-none z-10 flex-1">
-            <div className="text-slate-500 text-[10px] md:text-xs mb-4 font-bold tracking-[0.6em] uppercase opacity-40">
-                Primary Chronometer
-            </div>
-            
-            <div className="font-digital text-7xl md:text-[8rem] leading-none tracking-widest text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.15)] tabular-nums font-bold italic relative px-10">
-                <span className="hidden md:inline-block absolute left-0 top-1/2 -translate-y-1/2 text-slate-800 text-6xl font-thin opacity-50 select-none">[</span>
-                {timeString}
-                <span className="hidden md:inline-block absolute right-0 top-1/2 -translate-y-1/2 text-slate-800 text-6xl font-thin opacity-50 select-none">]</span>
+            <div className="flex flex-col items-center select-none z-10 flex-1">
+                <div className="text-slate-800 text-[10px] md:text-xs mb-4 font-bold tracking-[1em] uppercase">
+                    PRIMARY TIME
+                </div>
+                
+                <div className="font-digital text-7xl md:text-[10rem] leading-none tracking-widest text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.1)] tabular-nums font-bold italic relative px-12 mb-10">
+                    <span className="hidden md:inline-block absolute left-0 top-1/2 -translate-y-1/2 text-slate-900 text-6xl font-thin opacity-20 select-none">[</span>
+                    {timeString}
+                    <span className="hidden md:inline-block absolute right-0 top-1/2 -translate-y-1/2 text-slate-900 text-6xl font-thin opacity-20 select-none">]</span>
+                </div>
+
+                <div className="flex flex-row justify-center w-full">
+                    <SubClock label="LONDON / UTC" zone="Europe/London" date={date} color="text-cyan-500/80" />
+                </div>
+
+                <div className="mt-12 w-80 h-[1px] bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
             </div>
 
-            <div className="mt-8 flex justify-center animate-[fadeIn_0.5s_ease-out]">
-                <SubClock label="LONDON / UTC" zone="Europe/London" date={date} color="text-cyan-500/80" />
-            </div>
-
-            <div className="mt-6 w-48 h-[1px] bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
+            <NetworkStatus />
         </div>
-
-        <NetworkStatus />
     </div>
   );
 };
