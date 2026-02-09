@@ -6,6 +6,7 @@ import { Timer } from './components/Timer';
 import { WeatherWidget } from './components/WeatherWidget';
 import { EarthquakeWidget } from './components/EarthquakeWidget';
 import { LocalMusicPlayer } from './components/LocalMusicPlayer';
+import { AlarmWidget } from './components/AlarmWidget';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { useClock } from './hooks/useClock';
 
@@ -21,12 +22,18 @@ const App: React.FC = () => {
   const [bgAssets, setBgAssets] = useState<BackgroundAsset[]>([]);
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
   const [isMusicOpen, setIsMusicOpen] = useState(false);
+  const [isAlarmOpen, setIsAlarmOpen] = useState(false);
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [bgVolume, setBgVolume] = useState(0.5);
   const [isBgMuted, setIsBgMuted] = useState(true);
   const [isSystemStarted, setIsSystemStarted] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   
+  // 背景調整設定
+  const [bgDimming, setBgDimming] = useState(0.7); // 0.0 to 1.0
+  const [bgBlur, setBgBlur] = useState(2); // 0 to 20px
+
   // スライドショー設定
   const [isSlideshowActive, setIsSlideshowActive] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(30); // 秒
@@ -53,11 +60,31 @@ const App: React.FC = () => {
     if (savedVisibility) {
         try { setVisibility(JSON.parse(savedVisibility)); } catch (e) {}
     }
+    const savedDim = localStorage.getItem('bg_dimming');
+    const savedBlur = localStorage.getItem('bg_blur');
+    if (savedDim) setBgDimming(parseFloat(savedDim));
+    if (savedBlur) setBgBlur(parseFloat(savedBlur));
   }, []);
 
   useEffect(() => {
     localStorage.setItem('module_visibility', JSON.stringify(visibility));
   }, [visibility]);
+
+  useEffect(() => {
+    localStorage.setItem('bg_dimming', bgDimming.toString());
+    localStorage.setItem('bg_blur', bgBlur.toString());
+  }, [bgDimming, bgBlur]);
+
+  const handleForceSync = () => {
+    setIsSyncing(true);
+    // システム全体に同期イベントを通知
+    window.dispatchEvent(new CustomEvent('system-sync'));
+    
+    // 演出として1秒後に解除
+    setTimeout(() => {
+      setIsSyncing(false);
+    }, 1000);
+  };
 
   // 背景切り替えロジック
   const nextBackground = useCallback(() => {
@@ -91,7 +118,6 @@ const App: React.FC = () => {
     
     if (isSlideshowActive && bgAssets.length > 1 && isSystemStarted) {
         slideshowTimerRef.current = setInterval(() => {
-            // 現在が動画で再生中の場合は、タイマーによる強制切り替えをスキップ（または動画終了時に任せる）
             const current = bgAssets[currentBgIndex];
             if (current?.type === 'video' && videoRef.current && !videoRef.current.paused) {
                 return;
@@ -159,6 +185,7 @@ const App: React.FC = () => {
                         autoPlay 
                         muted={isBgMuted}
                         playsInline
+                        loop={bgAssets.length === 1 || !isSlideshowActive}
                         onEnded={() => isSlideshowActive && nextBackground()}
                         className="w-full h-full object-cover"
                     >
@@ -170,10 +197,28 @@ const App: React.FC = () => {
                         style={{ backgroundImage: `url(${currentAsset.url})` }}
                     />
                 )}
-                <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" />
+                {/* 調整可能なオーバーレイ層 */}
+                <div 
+                  className="absolute inset-0 bg-black transition-all duration-300" 
+                  style={{ 
+                    opacity: bgDimming,
+                    backdropFilter: `blur(${bgBlur}px)`,
+                    WebkitBackdropFilter: `blur(${bgBlur}px)`
+                  }} 
+                />
             </div>
         )}
       </div>
+
+      {/* Sync Overlay */}
+      {isSyncing && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-cyan-950/20 backdrop-blur-md">
+           <div className="text-cyan-400 font-digital text-2xl tracking-[1em] animate-pulse">RE-CALIBRATING...</div>
+           <div className="w-64 h-1 bg-slate-800 mt-4 overflow-hidden rounded-full">
+              <div className="h-full bg-cyan-500 animate-[progress_1s_ease-in-out]"></div>
+           </div>
+        </div>
+      )}
       
       {/* Manual Slideshow Controls (Hover only) */}
       {bgAssets.length > 1 && (
@@ -208,13 +253,17 @@ const App: React.FC = () => {
       </main>
       
       <LocalMusicPlayer isOpen={isMusicOpen} onClose={() => setIsMusicOpen(false)} />
+      <AlarmWidget isOpen={isAlarmOpen} onClose={() => setIsAlarmOpen(false)} currentDate={date} />
 
       {/* Display Control Menu */}
       {isDisplaySettingsOpen && (
-        <div className="fixed bottom-24 right-6 bg-black/95 border border-slate-700 p-4 rounded-sm z-[60] shadow-2xl w-72 backdrop-blur-xl">
-            <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-4 border-b border-slate-800 pb-2">SYSTEM CONFIGURATION</h4>
+        <div className="fixed bottom-24 right-6 bg-black/95 border border-slate-700 p-4 rounded-sm z-[60] shadow-2xl w-80 backdrop-blur-xl">
+            <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-4 border-b border-slate-800 pb-2 flex justify-between items-center">
+              <span>SYSTEM CONFIGURATION</span>
+              <button onClick={handleForceSync} className="text-[8px] bg-cyan-900/30 px-2 py-0.5 border border-cyan-800 hover:bg-cyan-500 hover:text-black transition-all">FORCE SYNC</button>
+            </h4>
             
-            <div className="space-y-6">
+            <div className="space-y-5">
                 {/* Visibility Settings */}
                 <div className="grid grid-cols-2 gap-2">
                     {Object.entries({
@@ -233,8 +282,37 @@ const App: React.FC = () => {
                     ))}
                 </div>
 
+                {/* Visual Adjustments */}
+                <div className="pt-3 border-t border-slate-800">
+                  <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Ambient Visuals</h4>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest">
+                        <span>Dimming</span>
+                        <span className="text-cyan-400">{Math.round(bgDimming * 100)}%</span>
+                      </div>
+                      <input 
+                        type="range" min="0" max="1" step="0.05" value={bgDimming}
+                        onChange={(e) => setBgDimming(parseFloat(e.target.value))}
+                        className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest">
+                        <span>Fog Intensity</span>
+                        <span className="text-cyan-400">{bgBlur}px</span>
+                      </div>
+                      <input 
+                        type="range" min="0" max="20" step="1" value={bgBlur}
+                        onChange={(e) => setBgBlur(parseFloat(e.target.value))}
+                        className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Slideshow Settings */}
-                <div className="pt-4 border-t border-slate-800">
+                <div className="pt-3 border-t border-slate-800">
                     <div className="flex justify-between items-center mb-3">
                         <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold uppercase">Slideshow</h4>
                         <div className="flex gap-2">
@@ -254,15 +332,10 @@ const App: React.FC = () => {
                             className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500"
                         />
                     </div>
-                    
-                    <div className="mt-3 flex justify-between items-center">
-                        <span className="text-[9px] text-slate-500">ASSETS: {bgAssets.length}</span>
-                        <button onClick={() => { setBgAssets([]); setCurrentBgIndex(0); }} className="text-[8px] text-red-500/60 hover:text-red-500 underline">CLEAR ALL</button>
-                    </div>
                 </div>
 
                 {/* Audio Settings */}
-                <div className="pt-4 border-t border-slate-800">
+                <div className="pt-3 border-t border-slate-800">
                     <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Background Volume</h4>
                     <div className="flex items-center gap-3">
                         <button onClick={() => setIsBgMuted(!isBgMuted)} className={`text-[10px] transition-colors ${isBgMuted ? 'text-red-500' : 'text-cyan-400'}`}>
@@ -281,6 +354,9 @@ const App: React.FC = () => {
 
       {/* Floating Action Buttons */}
       <div className="fixed bottom-6 right-6 flex gap-3 z-50 opacity-0 hover:opacity-100 transition-opacity duration-300">
+        <button onClick={() => setIsAlarmOpen(!isAlarmOpen)} className={`p-3 rounded-full border bg-gray-900/80 transition-all ${isAlarmOpen ? 'border-cyan-500 text-white shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-slate-700 text-slate-400 hover:text-white hover:border-cyan-500/50'}`}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 7v5l3 3"/><circle cx="12" cy="12" r="9"/><path d="M16.5 3.5l2.5 2"/><path d="M7.5 3.5l-2.5 2"/></svg>
+        </button>
         <button onClick={() => setIsDisplaySettingsOpen(!isDisplaySettingsOpen)} className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         </button>
