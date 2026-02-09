@@ -50,145 +50,112 @@ const CalendarWidget: React.FC<{ date: Date }> = ({ date }) => {
     );
 };
 
-const NetworkStatus: React.FC = () => {
-    const [latency, setLatency] = useState<number | null>(null);
-    const [history, setHistory] = useState<number[]>(new Array(10).fill(0));
-    const [networkStats, setNetworkStats] = useState({ dl: 0, ul: 0 });
-    const [isMeasuring, setIsMeasuring] = useState(false);
-    const [hasTested, setHasTested] = useState(false);
-    const [progress, setProgress] = useState(0);
+const CountdownWidget: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
+    const [targetDate, setTargetDate] = useState<string>(() => {
+        return localStorage.getItem('system_countdown_target') || "";
+    });
+    const [isEditing, setIsEditing] = useState(false);
 
-    const ping = async () => {
-        const start = performance.now();
-        try {
-            await fetch(window.location.href, { method: 'HEAD', cache: 'no-store' });
-            const ms = Math.round(performance.now() - start);
-            setLatency(ms);
-            setHistory(prev => [...prev.slice(1), ms]);
-        } catch (e) {
-            setLatency(null);
+    const timeLeft = useMemo(() => {
+        let target: number;
+        let isFallback = false;
+
+        if (targetDate) {
+            target = new Date(targetDate).getTime();
+        } else {
+            // 未設定時は次の日の00:00をターゲットにする
+            const nextMidnight = new Date(currentDate);
+            nextMidnight.setHours(24, 0, 0, 0);
+            target = nextMidnight.getTime();
+            isFallback = true;
         }
-    };
 
-    // Fast.comスタイルのバースト計測
-    const runSpeedTest = async () => {
-        if (isMeasuring) return;
-        setIsMeasuring(true);
-        setHasTested(false);
-        setProgress(0);
+        const now = currentDate.getTime();
+        const diff = target - now;
 
-        const TEST_DURATION = 3000; // 3秒間サンプリング
-        const startTime = performance.now();
-        let totalBytes = 0;
-        let samples = 0;
+        if (diff <= 0 && !isFallback) return { d: 0, h: 0, m: 0, s: 0, expired: true, isFallback };
 
-        try {
-            // 3秒間、全力でFetchを繰り返して実効スループットをサンプリング
-            while (performance.now() - startTime < TEST_DURATION) {
-                const fetchStart = performance.now();
-                const response = await fetch(window.location.href + '?burst=' + Date.now(), { 
-                    cache: 'no-store',
-                    mode: 'same-origin'
-                });
-                
-                if (!response.ok) throw new Error("Connection failed");
-                
-                const blob = await response.blob();
-                totalBytes += blob.size;
-                samples++;
-                
-                // 進捗更新
-                const elapsed = performance.now() - startTime;
-                setProgress(Math.min((elapsed / TEST_DURATION) * 100, 99));
-            }
-            
-            const finalTime = (performance.now() - startTime) / 1000; // 秒
-            const mbps = (totalBytes * 8) / (finalTime * 1000 * 1000);
-            
-            // 下り速度を元に、Fast.comのような安定した数値を算出
-            setNetworkStats({ 
-                dl: mbps, 
-                ul: mbps * (0.3 + Math.random() * 0.2) // 上りは推測値
-            });
-            setHasTested(true);
-            setProgress(100);
-        } catch (e) {
-            console.error("Burst test error:", e);
-            // 失敗した場合はリセット
-            setHasTested(false);
-        } finally {
-            setIsMeasuring(false);
-        }
-    };
-
-    useEffect(() => {
-        ping();
-        const interval = setInterval(ping, 5000);
-        const handleSync = () => ping();
-        window.addEventListener('system-sync', handleSync);
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener('system-sync', handleSync);
+        return {
+            d: Math.floor(diff / (1000 * 60 * 60 * 24)),
+            h: Math.floor((diff / (1000 * 60 * 60)) % 24),
+            m: Math.floor((diff / (1000 * 60)) % 60),
+            s: Math.floor((diff / 1000) % 60),
+            expired: false,
+            isFallback
         };
-    }, []);
+    }, [targetDate, currentDate]);
+
+    const handleSave = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setTargetDate(e.target.value);
+        localStorage.setItem('system_countdown_target', e.target.value);
+    };
+
+    const handleReset = () => {
+        setTargetDate("");
+        localStorage.removeItem('system_countdown_target');
+    };
 
     return (
-        <div className="hidden lg:flex flex-col items-start justify-center w-48 gap-4">
+        <div className="hidden lg:flex flex-col items-start justify-center w-48 gap-4 select-none">
             <div className="w-full">
-                <div className="text-[10px] text-cyan-600 tracking-widest font-mono mb-1 flex justify-between items-center">
-                    <span>TELEMETRY</span>
+                <div className="text-[10px] text-cyan-600 tracking-widest font-mono mb-2 flex justify-between items-center border-b border-slate-800 pb-1">
+                    <span>COUNTDOWN</span>
                     <button 
-                        onClick={runSpeedTest} 
-                        disabled={isMeasuring}
-                        className={`text-[8px] border px-2 py-0.5 transition-all ${isMeasuring ? 'border-orange-500 text-orange-500 animate-pulse' : 'border-slate-700 text-slate-500 hover:border-cyan-500 hover:text-cyan-400'}`}
+                        onClick={() => setIsEditing(!isEditing)} 
+                        className="text-[8px] border border-slate-700 px-2 py-0.5 text-slate-500 hover:border-cyan-500 hover:text-cyan-400 transition-all"
                     >
-                        {isMeasuring ? 'SAMPLING...' : 'FAST TEST'}
+                        {isEditing ? 'CLOSE' : 'SET TARGET'}
                     </button>
                 </div>
-                
-                <div className="flex justify-between items-baseline mb-1">
-                    <span className="text-[8px] text-slate-600 font-mono tracking-tighter uppercase">
-                        {isMeasuring ? 'COLLECTING DATA' : (hasTested ? 'BURST MEASURED' : 'STANDBY')}
-                    </span>
-                    <span className={`text-xs font-digital ${latency && latency > 200 ? 'text-red-500' : 'text-cyan-400'}`}>
-                        {latency !== null ? `${latency}MS` : 'LOST'}
-                    </span>
-                </div>
 
-                {/* Progress Bar or History Graph */}
-                <div className="h-5 w-full bg-slate-900/50 mb-3 relative overflow-hidden flex items-end gap-1">
-                    {isMeasuring ? (
-                        <div className="absolute inset-0 bg-cyan-950/20">
-                            <div 
-                                className="h-full bg-cyan-500/40 transition-all duration-300" 
-                                style={{ width: `${progress}%` }} 
-                            />
+                {isEditing ? (
+                    <div className="animate-[fadeIn_0.2s] space-y-2">
+                        <input 
+                            type="datetime-local" 
+                            value={targetDate}
+                            onChange={handleSave}
+                            className="bg-black border border-slate-700 text-cyan-400 text-[10px] p-2 w-full outline-none focus:border-cyan-500 rounded-sm font-digital"
+                        />
+                        <button 
+                            onClick={handleReset}
+                            className="w-full text-[8px] bg-red-950/20 border border-red-900/50 text-red-500 py-1 hover:bg-red-900/40 transition-all font-mono uppercase tracking-widest"
+                        >
+                            Reset to Daily 00:00
+                        </button>
+                        <div className="text-[8px] text-slate-600 font-mono uppercase">SYTEM TARGET LOCK</div>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {timeLeft?.expired ? (
+                            <div className="text-red-500 font-digital text-xl tracking-widest animate-pulse border-l border-red-900 pl-3">
+                                MISSION COMPLETE
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-2 border-l border-slate-800 pl-3">
+                                {timeLeft?.isFallback && (
+                                    <div className="text-[8px] text-slate-600 font-mono tracking-widest mb-1">UNTIL NEXT 00:00</div>
+                                )}
+                                <div className="flex justify-between items-baseline">
+                                    <span className="text-[24px] font-digital text-white leading-none italic">{timeLeft?.d}</span>
+                                    <span className="text-[8px] text-slate-500 tracking-widest">DAYS</span>
+                                </div>
+                                <div className="flex justify-between items-baseline">
+                                    <div className="flex gap-2 font-digital text-lg text-cyan-400 italic">
+                                        <span>{timeLeft?.h.toString().padStart(2, '0')}</span>
+                                        <span className="animate-pulse">:</span>
+                                        <span>{timeLeft?.m.toString().padStart(2, '0')}</span>
+                                        <span className="animate-pulse">:</span>
+                                        <span>{timeLeft?.s.toString().padStart(2, '0')}</span>
+                                    </div>
+                                    <span className="text-[8px] text-slate-600 font-mono uppercase">T-MINUS</span>
+                                </div>
+                            </div>
+                        )}
+                        <div className="text-[7px] text-slate-700 font-mono tracking-widest uppercase">
+                            Objective Synchronizer v1.1
                         </div>
-                    ) : (
-                        history.map((ms, i) => (
-                            <div 
-                              key={i} 
-                              className={`flex-1 border-t transition-all duration-500 ${ms > 150 ? 'bg-red-900/40 border-red-500/50' : 'bg-cyan-900/40 border-cyan-500/50'}`} 
-                              style={{ height: `${Math.min(Math.max((ms / 100) * 100, 10), 100)}%` }}
-                            />
-                        ))
-                    )}
-                </div>
-
-                <div className="flex flex-col gap-1 border-l-2 border-slate-800 pl-3">
-                    <div className="flex justify-between items-center w-full">
-                        <span className="text-[8px] text-slate-500 tracking-tighter uppercase">Downlink</span>
-                        <span className="text-[10px] font-digital text-cyan-400">
-                            {hasTested ? networkStats.dl.toFixed(1) : (isMeasuring ? '...' : '---')} <span className="text-[7px] text-slate-600">MBPS</span>
-                        </span>
                     </div>
-                    <div className="flex justify-between items-center w-full">
-                        <span className="text-[8px] text-slate-500 tracking-tighter uppercase">Uplink</span>
-                        <span className="text-[10px] font-digital text-emerald-500">
-                            {hasTested ? networkStats.ul.toFixed(1) : (isMeasuring ? '...' : '---')} <span className="text-[7px] text-slate-600">MBPS</span>
-                        </span>
-                    </div>
-                </div>
+                )}
             </div>
         </div>
     );
@@ -221,7 +188,6 @@ export const MainClock: React.FC<MainClockProps> = ({ date }) => {
                     <span className="hidden md:inline-block absolute right-0 top-1/2 -translate-y-1/2 text-slate-900 text-6xl font-thin opacity-20 select-none">]</span>
                 </div>
 
-                {/* Main Clock Sub: LONDON Only */}
                 <div className="mt-4 flex flex-row justify-center">
                     <SubClock label="LONDON / UTC" zone="Europe/London" date={date} color="text-cyan-500/80" />
                 </div>
@@ -229,7 +195,7 @@ export const MainClock: React.FC<MainClockProps> = ({ date }) => {
                 <div className="mt-12 w-full max-w-md h-[1px] bg-gradient-to-r from-transparent via-slate-800 to-transparent"></div>
             </div>
 
-            <NetworkStatus />
+            <CountdownWidget currentDate={date} />
         </div>
     </div>
   );
