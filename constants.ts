@@ -5,10 +5,18 @@ export const WORLD_ZONES: TimeZoneConfig[] = [
   {
     id: 'jp',
     label: 'TYO',
-    subLabel: 'TOKYO',
+    subLabel: 'TOKYO / JAPAN',
     zone: 'Asia/Tokyo',
     lat: 35.6895,
     lon: 139.6917,
+  },
+  {
+    id: 'sg',
+    label: 'SGP',
+    subLabel: 'SINGAPORE / SGT',
+    zone: 'Asia/Singapore',
+    lat: 1.3521,
+    lon: 103.8198,
   },
   {
     id: 'de',
@@ -25,13 +33,5 @@ export const WORLD_ZONES: TimeZoneConfig[] = [
     zone: 'America/New_York',
     lat: 38.8951,
     lon: -77.0364,
-  },
-  {
-    id: 'sg',
-    label: 'SGP',
-    subLabel: 'SINGAPORE',
-    zone: 'Asia/Singapore',
-    lat: 1.3521,
-    lon: 103.8198,
   }
 ];
