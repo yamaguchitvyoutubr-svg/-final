@@ -62,16 +62,13 @@ const App: React.FC = () => {
   const [isSystemStarted, setIsSystemStarted] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  // アラームステート
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [triggeredAlarm, setTriggeredAlarm] = useState<Alarm | null>(null);
   const lastCheckedMinute = useRef<number>(-1);
 
-  // 背景調整設定
   const [bgDimming, setBgDimming] = useState(0.7);
   const [bgBlur, setBgBlur] = useState(2);
 
-  // スライドショー設定
   const [isSlideshowActive, setIsSlideshowActive] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(30);
   const [isShuffle, setIsShuffle] = useState(false);
@@ -117,7 +114,6 @@ const App: React.FC = () => {
     localStorage.setItem('system_alarms_v3', JSON.stringify(alarms));
   }, [alarms]);
 
-  // アラームチェックロジック (UI非表示でも実行)
   useEffect(() => {
     if (!isSystemStarted) return;
     const hours = date.getHours();
@@ -175,7 +171,9 @@ const App: React.FC = () => {
     if (video && isSystemStarted) {
         video.volume = isBgMuted ? 0 : bgVolume;
         video.muted = isBgMuted;
-        video.play().catch(() => { video.muted = true; });
+        if (video.paused) {
+            video.play().catch(() => { video.muted = true; });
+        }
     }
   }, [bgVolume, isBgMuted, currentBgIndex, isSystemStarted]);
 
@@ -190,7 +188,7 @@ const App: React.FC = () => {
     const files = event.target.files;
     if (files && files.length > 0) {
       const newAssets: BackgroundAsset[] = Array.from(files).map((file: File) => {
-        const type = (file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mov')) ? 'video' : 'video';
+        const type = (file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mov')) ? 'video' : 'image';
         return {
           id: Math.random().toString(36).substr(2, 9),
           url: URL.createObjectURL(file as Blob),
@@ -203,6 +201,12 @@ const App: React.FC = () => {
     }
   };
 
+  const handleResetBackgrounds = () => {
+    setBgAssets([]);
+    setCurrentBgIndex(0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const toggleVisibility = (key: keyof typeof visibility) => {
     setVisibility(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -212,7 +216,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-slate-200 flex flex-col items-center p-4 md:p-8 relative overflow-y-auto overflow-x-hidden font-sans">
       
-      {/* Triggered Alarm Overlay */}
       {triggeredAlarm && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-red-950/90 backdrop-blur-xl animate-pulse">
             <div className="flex flex-col items-center gap-8 p-10 md:p-16 border-8 border-red-500 shadow-[0_0_100px_rgba(239,68,68,0.8)] max-w-[90vw]">
@@ -232,7 +235,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Background Layer */}
+      {/* Background Layer with Animation */}
       <div className={`fixed inset-0 z-0 transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
         {currentAsset && (
             <div className="absolute inset-0">
@@ -274,9 +277,9 @@ const App: React.FC = () => {
           </div>
       )}
 
+      {/* Module Layout with Fixed Order */}
       <main className="w-[95%] flex flex-col items-center gap-10 md:gap-12 z-10 relative my-auto py-8">
-        <section className="w-full flex flex-col items-center py-4 gap-2">
-          {/* Order: Main Clock -> Weather -> Earthquake -> Alarm -> Timer -> World Clock */}
+        <section className="w-full flex flex-col items-center py-4 gap-6">
           <MainClock date={date} />
           {visibility.weather && <WeatherWidget />}
           {visibility.earthquake && <EarthquakeWidget />}
@@ -289,9 +292,9 @@ const App: React.FC = () => {
       
       <LocalMusicPlayer isOpen={isMusicOpen} onClose={() => setIsMusicOpen(false)} />
 
-      {/* Display Control Menu */}
+      {/* Display Control Menu with All Functions Restored */}
       {isDisplaySettingsOpen && (
-        <div className="fixed bottom-24 right-6 bg-black/95 border border-slate-700 p-4 rounded-sm z-[60] shadow-2xl w-80 backdrop-blur-xl">
+        <div className="fixed bottom-24 right-6 bg-black/95 border border-slate-700 p-4 rounded-sm z-[60] shadow-2xl w-80 backdrop-blur-xl max-h-[70vh] overflow-y-auto custom-scrollbar">
             <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-4 border-b border-slate-800 pb-2 flex justify-between items-center">
               <span>SYSTEM CONFIGURATION</span>
               <button onClick={handleForceSync} className="text-[8px] bg-cyan-900/30 px-2 py-0.5 border border-cyan-800 hover:bg-cyan-500 hover:text-black transition-all">FORCE SYNC</button>
@@ -317,7 +320,7 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="pt-3 border-t border-slate-800">
-                  <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Ambient Visuals</h4>
+                  <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Visual Engine</h4>
                   <div className="space-y-3">
                     <div className="space-y-1">
                       <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest"><span>Dimming</span><span className="text-cyan-400">{Math.round(bgDimming * 100)}%</span></div>
@@ -327,8 +330,44 @@ const App: React.FC = () => {
                       <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest"><span>Fog Intensity</span><span className="text-cyan-400">{bgBlur}px</span></div>
                       <input type="range" min="0" max="20" step="1" value={bgBlur} onChange={(e) => setBgBlur(parseFloat(e.target.value))} className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500" />
                     </div>
+                    
+                    {/* Background Audio Control */}
+                    {bgAssets.length > 0 && currentAsset?.type === 'video' && (
+                      <div className="space-y-1 pt-2">
+                        <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest"><span>Background Audio</span><span className="text-cyan-400">{Math.round(bgVolume * 100)}%</span></div>
+                        <input type="range" min="0" max="1" step="0.01" value={bgVolume} onChange={(e) => setBgVolume(parseFloat(e.target.value))} className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500" />
+                        <button onClick={() => setIsBgMuted(!isBgMuted)} className={`mt-2 w-full text-[8px] py-1 border transition-all ${isBgMuted ? 'border-red-900/50 text-red-500' : 'border-cyan-900/50 text-cyan-500'}`}>
+                          {isBgMuted ? 'UNMUTE BACKGROUND' : 'MUTE BACKGROUND'}
+                        </button>
+                      </div>
+                    )}
+                    
+                    {/* Reset Backgrounds */}
+                    {bgAssets.length > 0 && (
+                      <button 
+                        onClick={handleResetBackgrounds}
+                        className="w-full mt-2 text-[8px] py-1.5 border border-red-900/50 text-red-400 hover:bg-red-900/20 transition-all font-bold tracking-widest"
+                      >
+                        PURGE ASSETS
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Rotation Control Restored */}
+                {bgAssets.length > 1 && (
+                  <div className="pt-3 border-t border-slate-800">
+                    <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Rotation Control</h4>
+                    <div className="space-y-3">
+                      <button onClick={() => setIsSlideshowActive(!isSlideshowActive)} className={`w-full text-[8px] py-1 border transition-all ${isSlideshowActive ? 'border-cyan-500 text-cyan-400' : 'border-slate-800 text-slate-600'}`}>
+                        {isSlideshowActive ? 'SLIDESHOW: ACTIVE' : 'SLIDESHOW: PAUSED'}
+                      </button>
+                      <button onClick={() => setIsShuffle(!isShuffle)} className={`w-full text-[8px] py-1 border transition-all ${isShuffle ? 'border-cyan-500 text-cyan-400' : 'border-slate-800 text-slate-600'}`}>
+                        {isShuffle ? 'SHUFFLE: ON' : 'SHUFFLE: OFF'}
+                      </button>
+                    </div>
+                  </div>
+                )}
             </div>
         </div>
       )}
