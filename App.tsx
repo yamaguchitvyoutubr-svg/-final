@@ -6,7 +6,7 @@ import { Timer } from './components/Timer';
 import { WeatherWidget } from './components/WeatherWidget';
 import { EarthquakeWidget } from './components/EarthquakeWidget';
 import { LocalMusicPlayer } from './components/LocalMusicPlayer';
-import { AlarmWidget } from './components/AlarmWidget';
+import { AlarmModule } from './components/AlarmModule';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { useClock } from './hooks/useClock';
 
@@ -17,12 +17,44 @@ interface BackgroundAsset {
   label?: string;
 }
 
+interface Alarm {
+  id: string;
+  time: string; // HH:MM
+  label: string;
+  enabled: boolean;
+}
+
+const playAlarmSound = () => {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const now = ctx.currentTime;
+    const sequence = 5;
+    for (let i = 0; i < sequence; i++) {
+      const startTime = now + (i * 0.4);
+      [880, 1100, 1320].forEach(freq => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, startTime);
+        osc.frequency.exponentialRampToValueAtTime(freq / 2, startTime + 0.3);
+        gain.gain.setValueAtTime(0.05, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + 0.3);
+      });
+    }
+  } catch (e) {}
+};
+
 const App: React.FC = () => {
   const { date } = useClock();
   const [bgAssets, setBgAssets] = useState<BackgroundAsset[]>([]);
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
   const [isMusicOpen, setIsMusicOpen] = useState(false);
-  const [isAlarmOpen, setIsAlarmOpen] = useState(false);
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [bgVolume, setBgVolume] = useState(0.5);
@@ -30,13 +62,18 @@ const App: React.FC = () => {
   const [isSystemStarted, setIsSystemStarted] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   
+  // アラームステート
+  const [alarms, setAlarms] = useState<Alarm[]>([]);
+  const [triggeredAlarm, setTriggeredAlarm] = useState<Alarm | null>(null);
+  const lastCheckedMinute = useRef<number>(-1);
+
   // 背景調整設定
-  const [bgDimming, setBgDimming] = useState(0.7); // 0.0 to 1.0
-  const [bgBlur, setBgBlur] = useState(2); // 0 to 20px
+  const [bgDimming, setBgDimming] = useState(0.7);
+  const [bgBlur, setBgBlur] = useState(2);
 
   // スライドショー設定
   const [isSlideshowActive, setIsSlideshowActive] = useState(true);
-  const [slideshowInterval, setSlideshowInterval] = useState(30); // 秒
+  const [slideshowInterval, setSlideshowInterval] = useState(30);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
@@ -45,6 +82,7 @@ const App: React.FC = () => {
     earthquake: true,
     timer: true,
     grid: true,
+    alarms: true,
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,13 +91,18 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const hasSeen = localStorage.getItem('hasSeenTutorial');
-    if (!hasSeen) {
-        setShowTutorial(true);
-    }
-    const savedVisibility = localStorage.getItem('module_visibility');
+    if (!hasSeen) setShowTutorial(true);
+    
+    const savedVisibility = localStorage.getItem('module_visibility_v2');
     if (savedVisibility) {
         try { setVisibility(JSON.parse(savedVisibility)); } catch (e) {}
     }
+
+    const savedAlarms = localStorage.getItem('system_alarms_v3');
+    if (savedAlarms) {
+        try { setAlarms(JSON.parse(savedAlarms)); } catch (e) {}
+    }
+
     const savedDim = localStorage.getItem('bg_dimming');
     const savedBlur = localStorage.getItem('bg_blur');
     if (savedDim) setBgDimming(parseFloat(savedDim));
@@ -67,26 +110,38 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('module_visibility', JSON.stringify(visibility));
+    localStorage.setItem('module_visibility_v2', JSON.stringify(visibility));
   }, [visibility]);
 
   useEffect(() => {
-    localStorage.setItem('bg_dimming', bgDimming.toString());
-    localStorage.setItem('bg_blur', bgBlur.toString());
-  }, [bgDimming, bgBlur]);
+    localStorage.setItem('system_alarms_v3', JSON.stringify(alarms));
+  }, [alarms]);
+
+  // アラームチェックロジック (UI非表示でも実行)
+  useEffect(() => {
+    if (!isSystemStarted) return;
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const currentMinutes = hours * 60 + minutes;
+
+    if (currentMinutes === lastCheckedMinute.current) return;
+    lastCheckedMinute.current = currentMinutes;
+
+    const timeString = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    const matched = alarms.find(a => a.enabled && a.time === timeString);
+    
+    if (matched) {
+      setTriggeredAlarm(matched);
+      playAlarmSound();
+    }
+  }, [date, alarms, isSystemStarted]);
 
   const handleForceSync = () => {
     setIsSyncing(true);
-    // システム全体に同期イベントを通知
     window.dispatchEvent(new CustomEvent('system-sync'));
-    
-    // 演出として1秒後に解除
-    setTimeout(() => {
-      setIsSyncing(false);
-    }, 1000);
+    setTimeout(() => setIsSyncing(false), 1000);
   };
 
-  // 背景切り替えロジック
   const nextBackground = useCallback(() => {
     if (bgAssets.length <= 1) return;
     setIsTransitioning(true);
@@ -103,35 +158,18 @@ const App: React.FC = () => {
     }, 800);
   }, [bgAssets.length, isShuffle]);
 
-  const prevBackground = useCallback(() => {
-    if (bgAssets.length <= 1) return;
-    setIsTransitioning(true);
-    setTimeout(() => {
-        setCurrentBgIndex(prev => (prev - 1 + bgAssets.length) % bgAssets.length);
-        setIsTransitioning(false);
-    }, 800);
-  }, [bgAssets.length]);
-
-  // スライドショータイマー
   useEffect(() => {
     if (slideshowTimerRef.current) clearInterval(slideshowTimerRef.current);
-    
     if (isSlideshowActive && bgAssets.length > 1 && isSystemStarted) {
         slideshowTimerRef.current = setInterval(() => {
             const current = bgAssets[currentBgIndex];
-            if (current?.type === 'video' && videoRef.current && !videoRef.current.paused) {
-                return;
-            }
+            if (current?.type === 'video' && videoRef.current && !videoRef.current.paused) return;
             nextBackground();
         }, slideshowInterval * 1000);
     }
-
-    return () => {
-        if (slideshowTimerRef.current) clearInterval(slideshowTimerRef.current);
-    };
+    return () => { if (slideshowTimerRef.current) clearInterval(slideshowTimerRef.current); };
   }, [isSlideshowActive, slideshowInterval, bgAssets.length, currentBgIndex, isSystemStarted, nextBackground]);
 
-  // ビデオ再生制御
   useEffect(() => {
     const video = videoRef.current;
     if (video && isSystemStarted) {
@@ -152,7 +190,7 @@ const App: React.FC = () => {
     const files = event.target.files;
     if (files && files.length > 0) {
       const newAssets: BackgroundAsset[] = Array.from(files).map((file: File) => {
-        const type = (file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mov')) ? 'video' : 'image';
+        const type = (file.type.startsWith('video/') || file.name.toLowerCase().endsWith('.mov')) ? 'video' : 'video';
         return {
           id: Math.random().toString(36).substr(2, 9),
           url: URL.createObjectURL(file as Blob),
@@ -174,7 +212,27 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-slate-200 flex flex-col items-center p-4 md:p-8 relative overflow-y-auto overflow-x-hidden font-sans">
       
-      {/* Background Layer with Crossfade */}
+      {/* Triggered Alarm Overlay */}
+      {triggeredAlarm && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-red-950/90 backdrop-blur-xl animate-pulse">
+            <div className="flex flex-col items-center gap-8 p-10 md:p-16 border-8 border-red-500 shadow-[0_0_100px_rgba(239,68,68,0.8)] max-w-[90vw]">
+                <div className="text-red-500 font-digital text-7xl md:text-[12rem] leading-none tracking-tighter italic">
+                    {triggeredAlarm.time}
+                </div>
+                <div className="text-white font-digital tracking-[0.5em] text-xl md:text-4xl uppercase text-center font-bold">
+                    {triggeredAlarm.label} DETECTED
+                </div>
+                <button 
+                    onClick={() => setTriggeredAlarm(null)}
+                    className="mt-8 px-12 py-4 md:px-20 md:py-6 bg-white text-red-600 font-black tracking-[0.5em] text-xl md:text-2xl hover:bg-red-600 hover:text-white transition-all duration-300"
+                >
+                    ACKNOWLEDGE
+                </button>
+            </div>
+        </div>
+      )}
+
+      {/* Background Layer */}
       <div className={`fixed inset-0 z-0 transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
         {currentAsset && (
             <div className="absolute inset-0">
@@ -192,46 +250,20 @@ const App: React.FC = () => {
                         <source src={currentAsset.url} />
                     </video>
                 ) : (
-                    <div 
-                        className="w-full h-full bg-cover bg-center bg-no-repeat transition-all duration-1000"
-                        style={{ backgroundImage: `url(${currentAsset.url})` }}
-                    />
+                    <div className="w-full h-full bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(${currentAsset.url})` }} />
                 )}
-                {/* 調整可能なオーバーレイ層 */}
-                <div 
-                  className="absolute inset-0 bg-black transition-all duration-300" 
-                  style={{ 
-                    opacity: bgDimming,
-                    backdropFilter: `blur(${bgBlur}px)`,
-                    WebkitBackdropFilter: `blur(${bgBlur}px)`
-                  }} 
-                />
+                <div className="absolute inset-0 bg-black transition-all duration-300" style={{ opacity: bgDimming, backdropFilter: `blur(${bgBlur}px)`, WebkitBackdropFilter: `blur(${bgBlur}px)` }} />
             </div>
         )}
       </div>
 
-      {/* Sync Overlay */}
       {isSyncing && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-cyan-950/20 backdrop-blur-md">
            <div className="text-cyan-400 font-digital text-2xl tracking-[1em] animate-pulse">RE-CALIBRATING...</div>
-           <div className="w-64 h-1 bg-slate-800 mt-4 overflow-hidden rounded-full">
-              <div className="h-full bg-cyan-500 animate-[progress_1s_ease-in-out]"></div>
-           </div>
+           <div className="w-64 h-1 bg-slate-800 mt-4 overflow-hidden rounded-full"><div className="h-full bg-cyan-500 animate-[progress_1s_ease-in-out]"></div></div>
         </div>
       )}
       
-      {/* Manual Slideshow Controls (Hover only) */}
-      {bgAssets.length > 1 && (
-          <div className="fixed inset-y-0 inset-x-0 z-20 pointer-events-none flex justify-between items-center px-4 opacity-0 hover:opacity-100 transition-opacity duration-500">
-              <button onClick={prevBackground} className="pointer-events-auto p-4 bg-black/20 hover:bg-white/10 text-white/30 hover:text-white transition-all rounded-full backdrop-blur-sm">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M15 18l-6-6 6-6"/></svg>
-              </button>
-              <button onClick={nextBackground} className="pointer-events-auto p-4 bg-black/20 hover:bg-white/10 text-white/30 hover:text-white transition-all rounded-full backdrop-blur-sm">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18l6-6-6-6"/></svg>
-              </button>
-          </div>
-      )}
-
       {showTutorial && <TutorialOverlay onClose={handleStartSystem} />}
 
       {!isSystemStarted && !showTutorial && (
@@ -244,16 +276,18 @@ const App: React.FC = () => {
 
       <main className="w-[95%] flex flex-col items-center gap-10 md:gap-12 z-10 relative my-auto py-8">
         <section className="w-full flex flex-col items-center py-4 gap-2">
+          {/* Order: Main Clock -> Weather -> Earthquake -> Alarm -> Timer -> World Clock */}
           <MainClock date={date} />
           {visibility.weather && <WeatherWidget />}
           {visibility.earthquake && <EarthquakeWidget />}
         </section>
+        
+        {visibility.alarms && <AlarmModule alarms={alarms} setAlarms={setAlarms} />}
         {visibility.timer && <Timer />}
         {visibility.grid && <WorldGrid date={date} />}
       </main>
       
       <LocalMusicPlayer isOpen={isMusicOpen} onClose={() => setIsMusicOpen(false)} />
-      <AlarmWidget isOpen={isAlarmOpen} onClose={() => setIsAlarmOpen(false)} currentDate={date} />
 
       {/* Display Control Menu */}
       {isDisplaySettingsOpen && (
@@ -263,12 +297,12 @@ const App: React.FC = () => {
               <button onClick={handleForceSync} className="text-[8px] bg-cyan-900/30 px-2 py-0.5 border border-cyan-800 hover:bg-cyan-500 hover:text-black transition-all">FORCE SYNC</button>
             </h4>
             
-            <div className="space-y-5">
-                {/* Visibility Settings */}
+            <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-2">
                     {Object.entries({
                         weather: 'WEATHER',
                         earthquake: 'DISASTER',
+                        alarms: 'ALARM',
                         timer: 'CHRONO',
                         grid: 'WORLD'
                     }).map(([key, label]) => (
@@ -282,71 +316,18 @@ const App: React.FC = () => {
                     ))}
                 </div>
 
-                {/* Visual Adjustments */}
                 <div className="pt-3 border-t border-slate-800">
                   <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Ambient Visuals</h4>
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest">
-                        <span>Dimming</span>
-                        <span className="text-cyan-400">{Math.round(bgDimming * 100)}%</span>
-                      </div>
-                      <input 
-                        type="range" min="0" max="1" step="0.05" value={bgDimming}
-                        onChange={(e) => setBgDimming(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500"
-                      />
+                      <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest"><span>Dimming</span><span className="text-cyan-400">{Math.round(bgDimming * 100)}%</span></div>
+                      <input type="range" min="0" max="1" step="0.05" value={bgDimming} onChange={(e) => setBgDimming(parseFloat(e.target.value))} className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500" />
                     </div>
                     <div className="space-y-1">
-                      <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest">
-                        <span>Fog Intensity</span>
-                        <span className="text-cyan-400">{bgBlur}px</span>
-                      </div>
-                      <input 
-                        type="range" min="0" max="20" step="1" value={bgBlur}
-                        onChange={(e) => setBgBlur(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500"
-                      />
+                      <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest"><span>Fog Intensity</span><span className="text-cyan-400">{bgBlur}px</span></div>
+                      <input type="range" min="0" max="20" step="1" value={bgBlur} onChange={(e) => setBgBlur(parseFloat(e.target.value))} className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500" />
                     </div>
                   </div>
-                </div>
-
-                {/* Slideshow Settings */}
-                <div className="pt-3 border-t border-slate-800">
-                    <div className="flex justify-between items-center mb-3">
-                        <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold uppercase">Slideshow</h4>
-                        <div className="flex gap-2">
-                            <button onClick={() => setIsShuffle(!isShuffle)} className={`text-[8px] px-1.5 py-0.5 border ${isShuffle ? 'border-cyan-500 text-cyan-400 bg-cyan-900/20' : 'border-slate-800 text-slate-600'}`}>SHUFFLE</button>
-                            <button onClick={() => setIsSlideshowActive(!isSlideshowActive)} className={`text-[8px] px-1.5 py-0.5 border ${isSlideshowActive ? 'border-green-500 text-green-400 bg-green-900/20' : 'border-red-500 text-red-500'}`}>{isSlideshowActive ? 'AUTO ON' : 'AUTO OFF'}</button>
-                        </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                        <div className="flex justify-between text-[9px] text-slate-500 font-mono">
-                            <span>INTERVAL</span>
-                            <span className="text-cyan-400">{slideshowInterval}s</span>
-                        </div>
-                        <input 
-                            type="range" min="5" max="300" step="5" value={slideshowInterval}
-                            onChange={(e) => setSlideshowInterval(parseInt(e.target.value))}
-                            className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500"
-                        />
-                    </div>
-                </div>
-
-                {/* Audio Settings */}
-                <div className="pt-3 border-t border-slate-800">
-                    <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Background Volume</h4>
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setIsBgMuted(!isBgMuted)} className={`text-[10px] transition-colors ${isBgMuted ? 'text-red-500' : 'text-cyan-400'}`}>
-                            {isBgMuted ? 'MUTED' : 'LIVE'}
-                        </button>
-                        <input 
-                            type="range" min="0" max="1" step="0.01" value={bgVolume}
-                            onChange={(e) => setBgVolume(parseFloat(e.target.value))}
-                            className="flex-1 h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500"
-                        />
-                    </div>
                 </div>
             </div>
         </div>
@@ -354,9 +335,6 @@ const App: React.FC = () => {
 
       {/* Floating Action Buttons */}
       <div className="fixed bottom-6 right-6 flex gap-3 z-50 opacity-0 hover:opacity-100 transition-opacity duration-300">
-        <button onClick={() => setIsAlarmOpen(!isAlarmOpen)} className={`p-3 rounded-full border bg-gray-900/80 transition-all ${isAlarmOpen ? 'border-cyan-500 text-white shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'border-slate-700 text-slate-400 hover:text-white hover:border-cyan-500/50'}`}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 7v5l3 3"/><circle cx="12" cy="12" r="9"/><path d="M16.5 3.5l2.5 2"/><path d="M7.5 3.5l-2.5 2"/></svg>
-        </button>
         <button onClick={() => setIsDisplaySettingsOpen(!isDisplaySettingsOpen)} className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         </button>

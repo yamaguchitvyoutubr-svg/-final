@@ -11,20 +11,20 @@ export const WORLD_ZONES: TimeZoneConfig[] = [
     lon: 139.6917,
   },
   {
+    id: 'uk',
+    label: 'LON',
+    subLabel: 'LONDON / UTC',
+    zone: 'Europe/London',
+    lat: 51.5074,
+    lon: -0.1278,
+  },
+  {
     id: 'sg',
     label: 'SGP',
     subLabel: 'SINGAPORE / SGT',
     zone: 'Asia/Singapore',
     lat: 1.3521,
     lon: 103.8198,
-  },
-  {
-    id: 'de',
-    label: 'BER',
-    subLabel: 'BERLIN',
-    zone: 'Europe/Berlin',
-    lat: 52.5200,
-    lon: 13.4050,
   },
   {
     id: 'us-dc',
