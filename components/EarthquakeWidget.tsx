@@ -49,14 +49,12 @@ const translateText = (japaneseText: string): string => {
 export const EarthquakeWidget: React.FC = () => {
   const [eewData, setEewData] = useState<EEWData | null>(null);
   const [testMode, setTestMode] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   const fetchEEW = useCallback(async (silent = true) => {
       if (testMode) return;
       try {
         const res = await fetch('https://api.p2pquake.net/v2/history?codes=554&limit=1', { cache: 'no-store' });
         
-        // パースエラー防止: ステータスとContent-Typeを確認
         if (!res.ok) return;
         const contentType = res.headers.get("content-type");
         if (!contentType || !contentType.includes("application/json")) return;
@@ -66,7 +64,6 @@ export const EarthquakeWidget: React.FC = () => {
             const latestEEW = json[0];
             const diff = (Date.now() - new Date(latestEEW.time).getTime()) / 1000;
             
-            // 3分(180秒)以内の有効な速報を検知
             if (diff < 180 && !latestEEW.cancelled && latestEEW.earthquake) {
                 setEewData({
                     type: 'EEW',
@@ -85,7 +82,7 @@ export const EarthquakeWidget: React.FC = () => {
   }, [testMode]);
 
   useEffect(() => {
-      const interval = setInterval(() => fetchEEW(true), 5000); // 5秒間隔
+      const interval = setInterval(() => fetchEEW(true), 5000);
       fetchEEW(true); 
       return () => clearInterval(interval);
   }, [fetchEEW]);
@@ -93,13 +90,19 @@ export const EarthquakeWidget: React.FC = () => {
   const toggleTestMode = () => {
     if (!testMode) {
       setTestMode(true);
-      setEewData({ 
+      const testEew = { 
         type: 'EEW', 
         time: new Date().toISOString(), 
         hypocenter: "TEST AREA", 
         cancelled: false, 
         isWarning: true 
-      });
+      };
+      setEewData(testEew as EEWData);
+      
+      // システム全体の警報テストを発火（音とオーバーレイ）
+      window.dispatchEvent(new CustomEvent('test-eew-trigger', { 
+        detail: { hypocenter: "TEST AREA (SIMULATION)", time: testEew.time } 
+      }));
     } else {
       setTestMode(false);
       setEewData(null);
@@ -125,7 +128,7 @@ export const EarthquakeWidget: React.FC = () => {
                 <span className="text-[9px] text-cyan-500 font-mono tracking-tighter uppercase">REAL-TIME</span>
             </div>
             <button onClick={toggleTestMode} className={`text-[9px] tracking-widest px-2 py-0.5 border rounded-sm transition-colors ${testMode ? 'bg-orange-900/50 border-orange-500 text-orange-200' : 'border-slate-800 text-slate-600 hover:text-slate-400'}`}>
-                {testMode ? 'EXIT TEST' : 'TEST'}
+                {testMode ? 'EXIT TEST' : 'TEST ALERT'}
             </button>
           </div>
       </div>

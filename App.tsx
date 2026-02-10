@@ -38,42 +38,41 @@ const playEmergencySound = (type: 'ALARM' | 'EEW') => {
     const now = ctx.currentTime;
     
     if (type === 'EEW') {
-        // 緊急地震速報（EEW）: 日本でおなじみの4和音チャイム音 (C#5, E5, G#5, C#6)
+        // 緊急地震速報（EEW）: 4和音チャイム音 (C#5, E5, G#5, C#6)
+        // 周波数: 554.37Hz, 659.25Hz, 830.61Hz, 1108.73Hz
         const freqs = [554.37, 659.25, 830.61, 1108.73];
-        const rhythm = [0, 0.15, 0.3, 0.45];
+        const rhythm = [0, 0.12, 0.24, 0.36];
         
-        // 3サイクル繰り返すことで確実に注意を引く
+        // 3サイクル繰り返す
         for(let cycle = 0; cycle < 3; cycle++) {
-            const offset = cycle * 1.0;
+            const offset = cycle * 0.9;
             freqs.forEach((freq, i) => {
                 const startTime = now + offset + rhythm[i];
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
                 
-                // 正弦波でクリアな音にする
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(freq, startTime);
                 
                 gain.gain.setValueAtTime(0, startTime);
-                gain.gain.linearRampToValueAtTime(0.4, startTime + 0.05); // 少し音量を上げる
-                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.6);
+                gain.gain.linearRampToValueAtTime(0.3, startTime + 0.03);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.5);
                 
                 osc.connect(gain);
                 gain.connect(ctx.destination);
                 
                 osc.start(startTime);
-                osc.stop(startTime + 0.7);
+                osc.stop(startTime + 0.6);
             });
         }
         
-        // 背景に低周波の不協和音を加えて緊張感を増大させる
-        const lowFreqs = [220, 233.08];
-        lowFreqs.forEach(freq => {
+        // 低音の不協和音（緊張感の演出）
+        [220, 233.08].forEach(freq => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.frequency.setValueAtTime(freq, now);
             gain.gain.setValueAtTime(0, now);
-            gain.gain.linearRampToValueAtTime(0.08, now + 0.1);
+            gain.gain.linearRampToValueAtTime(0.05, now + 0.1);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 3.0);
             osc.connect(gain);
             gain.connect(ctx.destination);
@@ -173,6 +172,7 @@ const App: React.FC = () => {
                 const latest = data[0];
                 const diffSec = (Date.now() - new Date(latest.time).getTime()) / 1000;
                 
+                // 3分(180秒)以内の有効な速報を検知
                 if (diffSec < 180 && !latest.cancelled && latest.earthquake) {
                     const alert = {
                         hypocenter: latest.earthquake.hypocenter.name || '不明',
@@ -196,7 +196,23 @@ const App: React.FC = () => {
 
     const interval = setInterval(fetchEEWGlobal, 5000);
     fetchEEWGlobal();
-    return () => clearInterval(interval);
+    
+    // テスト用カスタムイベントのリスナー
+    const handleTestEEW = (e: any) => {
+        const detail = e.detail || { hypocenter: "TEST AREA", time: new Date().toISOString() };
+        setActiveEEW({
+            hypocenter: detail.hypocenter,
+            time: detail.time,
+            isWarning: true
+        });
+        playEmergencySound('EEW');
+    };
+    window.addEventListener('test-eew-trigger', handleTestEEW);
+
+    return () => {
+        clearInterval(interval);
+        window.removeEventListener('test-eew-trigger', handleTestEEW);
+    };
   }, [isSystemStarted]);
 
   // アラームチェック
