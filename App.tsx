@@ -116,7 +116,6 @@ const App: React.FC = () => {
 
   const [activeEEW, setActiveEEW] = useState<EEWAlert | null>(null);
 
-  // やかましさを抑えるため、初期の可視性を最小限に設定
   const [visibility, setVisibility] = useState({
     weather: false,
     earthquake: false,
@@ -145,7 +144,6 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('module_visibility_v3_minimal', JSON.stringify(visibility)); }, [visibility]);
   useEffect(() => { localStorage.setItem('system_alarms_v3', JSON.stringify(alarms)); }, [alarms]);
 
-  // EEW バックグラウンド監視：表示状態に関わらず、システムが起動していれば常に走る
   useEffect(() => {
     if (!isSystemStarted) return;
     const fetchEEWGlobal = async () => {
@@ -166,7 +164,7 @@ const App: React.FC = () => {
                     };
                     setActiveEEW(prev => {
                       if (!prev || prev.time !== alert.time) {
-                        playEmergencySound('EEW'); // ウィジェット非表示でも音がなる
+                        playEmergencySound('EEW');
                         return alert;
                       }
                       return prev;
@@ -288,7 +286,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-slate-200 flex flex-col items-center p-4 md:p-8 relative overflow-y-auto overflow-x-hidden font-sans">
       
-      {/* EEW 緊急警告オーバーレイ：ウィジェットの表示・非表示に関わらず強制表示 */}
       {activeEEW && (
         <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-red-600/95 backdrop-blur-3xl animate-[pulse_0.4s_infinite]">
             <div className="flex flex-col items-center gap-10 p-8 md:p-20 border-[12px] border-white shadow-[0_0_150px_rgba(255,255,255,0.8)] max-w-[95vw] text-center">
@@ -373,9 +370,13 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* 右下のコントロールパネル：MP3ボタンを復元 */}
       <div className="fixed bottom-6 right-6 flex gap-3 z-50 opacity-20 hover:opacity-100 transition-opacity duration-300">
         <button onClick={() => setIsDisplaySettingsOpen(!isDisplaySettingsOpen)} className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
+        <button onClick={() => setIsMusicOpen(!isMusicOpen)} className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
         </button>
         <button onClick={() => fileInputRef.current?.click()} className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
