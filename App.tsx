@@ -97,8 +97,11 @@ const App: React.FC = () => {
   const [isMusicOpen, setIsMusicOpen] = useState(false);
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [bgVolume, setBgVolume] = useState(0.5);
+  
+  // 背景動画専用の音量設定
+  const [bgVolume, setBgVolume] = useState(0.3);
   const [isBgMuted, setIsBgMuted] = useState(true);
+  
   const [isSystemStarted, setIsSystemStarted] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   
@@ -109,6 +112,7 @@ const App: React.FC = () => {
   const [bgDimming, setBgDimming] = useState(0.85);
   const [bgBlur, setBgBlur] = useState(4);
 
+  // 背景スライドショー/ループ設定
   const [isSlideshowActive, setIsSlideshowActive] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(30);
   const [isShuffle, setIsShuffle] = useState(false);
@@ -139,11 +143,20 @@ const App: React.FC = () => {
     const savedBlur = localStorage.getItem('bg_blur');
     if (savedDim) setBgDimming(parseFloat(savedDim));
     if (savedBlur) setBgBlur(parseFloat(savedBlur));
+    
+    // 背景設定の読み込み
+    const savedBgVol = localStorage.getItem('bg_volume');
+    const savedShuffle = localStorage.getItem('bg_shuffle');
+    if (savedBgVol) setBgVolume(parseFloat(savedBgVol));
+    if (savedShuffle) setIsShuffle(savedShuffle === 'true');
   }, []);
 
   useEffect(() => { localStorage.setItem('module_visibility_v3_minimal', JSON.stringify(visibility)); }, [visibility]);
   useEffect(() => { localStorage.setItem('system_alarms_v3', JSON.stringify(alarms)); }, [alarms]);
+  useEffect(() => { localStorage.setItem('bg_volume', bgVolume.toString()); }, [bgVolume]);
+  useEffect(() => { localStorage.setItem('bg_shuffle', isShuffle.toString()); }, [isShuffle]);
 
+  // EEW バックグラウンド監視（常に実行）
   useEffect(() => {
     if (!isSystemStarted) return;
     const fetchEEWGlobal = async () => {
@@ -189,6 +202,7 @@ const App: React.FC = () => {
     };
   }, [isSystemStarted]);
 
+  // アラームチェック
   useEffect(() => {
     if (!isSystemStarted) return;
     const hours = date.getHours();
@@ -231,7 +245,8 @@ const App: React.FC = () => {
     if (isSlideshowActive && bgAssets.length > 1 && isSystemStarted) {
         slideshowTimerRef.current = setInterval(() => {
             const current = bgAssets[currentBgIndex];
-            if (current?.type === 'video' && videoRef.current && !videoRef.current.paused) return;
+            // 動画再生中かつループ再生中でない場合は動画終了を待つ
+            if (current?.type === 'video' && videoRef.current && !videoRef.current.paused && !videoRef.current.ended) return;
             nextBackground();
         }, slideshowInterval * 1000);
     }
@@ -286,6 +301,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-slate-200 flex flex-col items-center p-4 md:p-8 relative overflow-y-auto overflow-x-hidden font-sans">
       
+      {/* EEW オーバーレイ */}
       {activeEEW && (
         <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-red-600/95 backdrop-blur-3xl animate-[pulse_0.4s_infinite]">
             <div className="flex flex-col items-center gap-10 p-8 md:p-20 border-[12px] border-white shadow-[0_0_150px_rgba(255,255,255,0.8)] max-w-[95vw] text-center">
@@ -311,7 +327,7 @@ const App: React.FC = () => {
         {currentAsset && (
             <div className="absolute inset-0">
                 {currentAsset.type === 'video' ? (
-                    <video ref={videoRef} key={currentAsset.url} autoPlay muted={isBgMuted} playsInline loop={bgAssets.length === 1 || !isSlideshowActive} onEnded={() => isSlideshowActive && nextBackground()} className="w-full h-full object-cover">
+                    <video ref={videoRef} key={currentAsset.url} autoPlay muted={isBgMuted} playsInline loop={bgAssets.length === 1} onEnded={() => isSlideshowActive && nextBackground()} className="w-full h-full object-cover">
                         <source src={currentAsset.url} />
                     </video>
                 ) : (
@@ -347,12 +363,14 @@ const App: React.FC = () => {
               <span>SYSTEM CONFIGURATION</span>
               <button onClick={handleForceSync} className="text-[8px] bg-cyan-900/30 px-2 py-0.5 border border-cyan-800 hover:bg-cyan-500 hover:text-black transition-all">FORCE SYNC</button>
             </h4>
+            
             <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-2">
                     {Object.entries({ weather: 'WEATHER', earthquake: 'DISASTER', alarms: 'ALARM', timer: 'CHRONO', grid: 'WORLD' }).map(([key, label]) => (
                         <button key={key} onClick={() => toggleVisibility(key as any)} className={`px-2 py-2 text-[9px] font-bold tracking-widest border transition-all ${visibility[key as keyof typeof visibility] ? 'bg-cyan-900/40 border-cyan-500 text-cyan-400' : 'bg-transparent border-slate-800 text-slate-600'}`}>{label}</button>
                     ))}
                 </div>
+
                 <div className="pt-3 border-t border-slate-800">
                   <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Visual Engine</h4>
                   <div className="space-y-3">
@@ -366,19 +384,49 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* 背景アセットの制御（ループ・音量・シャッフル） */}
+                {bgAssets.length > 0 && (
+                   <div className="pt-3 border-t border-slate-800">
+                      <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Background Media Controls</h4>
+                      <div className="space-y-3">
+                        {currentAsset?.type === 'video' && (
+                          <div className="space-y-1">
+                             <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest"><span>Video Volume</span><span className="text-cyan-400">{Math.round(bgVolume * 100)}%</span></div>
+                             <input type="range" min="0" max="1" step="0.01" value={bgVolume} onChange={(e) => setBgVolume(parseFloat(e.target.value))} className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500" />
+                             <button onClick={() => setIsBgMuted(!isBgMuted)} className={`mt-2 w-full text-[8px] py-1 border transition-all ${isBgMuted ? 'border-red-900/50 text-red-500' : 'border-cyan-900/50 text-cyan-500'}`}>{isBgMuted ? 'UNMUTE VIDEO' : 'MUTE VIDEO'}</button>
+                          </div>
+                        )}
+                        
+                        {bgAssets.length > 1 && (
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                             <button onClick={() => setIsSlideshowActive(!isSlideshowActive)} className={`text-[8px] py-1.5 border transition-all ${isSlideshowActive ? 'border-cyan-500 text-cyan-400' : 'border-slate-800 text-slate-600'}`}>{isSlideshowActive ? 'LOOP ON' : 'LOOP OFF'}</button>
+                             <button onClick={() => setIsShuffle(!isShuffle)} className={`text-[8px] py-1.5 border transition-all ${isShuffle ? 'border-cyan-500 text-cyan-400' : 'border-slate-800 text-slate-600'}`}>{isShuffle ? 'SHUFFLE ON' : 'SHUFFLE OFF'}</button>
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-[8px] text-slate-500 font-mono uppercase tracking-widest"><span>Switch Interval</span><span className="text-cyan-400">{slideshowInterval}s</span></div>
+                            <input type="range" min="5" max="300" step="5" value={slideshowInterval} onChange={(e) => setSlideshowInterval(parseInt(e.target.value))} className="w-full h-1 bg-slate-800 appearance-none cursor-pointer accent-cyan-500" />
+                        </div>
+                        
+                        <button onClick={handleResetBackgrounds} className="w-full mt-2 text-[8px] py-1.5 border border-red-900/50 text-red-400 hover:bg-red-900/20 transition-all font-bold tracking-widest uppercase">Clear All Assets</button>
+                      </div>
+                   </div>
+                )}
             </div>
         </div>
       )}
 
-      {/* 右下のコントロールパネル：MP3ボタンを復元 */}
+      {/* コントロールパネル：MP3、設定、アセット追加 */}
       <div className="fixed bottom-6 right-6 flex gap-3 z-50 opacity-20 hover:opacity-100 transition-opacity duration-300">
-        <button onClick={() => setIsDisplaySettingsOpen(!isDisplaySettingsOpen)} className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all">
+        <button onClick={() => setIsDisplaySettingsOpen(!isDisplaySettingsOpen)} title="Configuration" className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all hover:border-cyan-500/50">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         </button>
-        <button onClick={() => setIsMusicOpen(!isMusicOpen)} className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]">
+        <button onClick={() => setIsMusicOpen(!isMusicOpen)} title="Audio Terminal" className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all hover:border-cyan-500/50 hover:shadow-[0_0_10px_rgba(6,182,212,0.2)]">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
         </button>
-        <button onClick={() => fileInputRef.current?.click()} className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all">
+        <button onClick={() => fileInputRef.current?.click()} title="Import Background" className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all hover:border-cyan-500/50">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
         </button>
         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*,video/mp4,video/quicktime,.mov" multiple className="hidden" />
