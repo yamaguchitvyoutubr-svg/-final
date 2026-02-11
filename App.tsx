@@ -30,17 +30,37 @@ interface EEWAlert {
   isWarning: boolean;
 }
 
-const playEmergencySound = (type: 'ALARM' | 'EEW') => {
-  try {
+// アプリ全体で共有するAudioContext
+let globalAudioCtx: AudioContext | null = null;
+
+const getAudioContext = () => {
+  if (!globalAudioCtx) {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    if (AudioContextClass) {
+      globalAudioCtx = new AudioContextClass();
+    }
+  }
+  return globalAudioCtx;
+};
+
+// 警告音再生
+const playEmergencySound = async (type: 'ALARM' | 'EEW') => {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    
+    // 常に最新の状態にレジューム
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    
     const now = ctx.currentTime;
     
     if (type === 'EEW') {
+        // EEW音：554Hzベースのチャイム
         const freqs = [554.37, 659.25, 830.61, 1108.73];
         const rhythm = [0, 0.12, 0.24, 0.36];
-        for(let cycle = 0; cycle < 3; cycle++) {
+        for(let cycle = 0; cycle < 4; cycle++) {
             const offset = cycle * 0.9;
             freqs.forEach((freq, i) => {
                 const startTime = now + offset + rhythm[i];
@@ -49,45 +69,36 @@ const playEmergencySound = (type: 'ALARM' | 'EEW') => {
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(freq, startTime);
                 gain.gain.setValueAtTime(0, startTime);
-                gain.gain.linearRampToValueAtTime(0.4, startTime + 0.03);
-                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.5);
+                gain.gain.linearRampToValueAtTime(0.5, startTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.6);
                 osc.connect(gain);
                 gain.connect(ctx.destination);
                 osc.start(startTime);
-                osc.stop(startTime + 0.6);
+                osc.stop(startTime + 0.7);
             });
         }
-        [220, 233.08].forEach(freq => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.frequency.setValueAtTime(freq, now);
-            gain.gain.setValueAtTime(0, now);
-            gain.gain.linearRampToValueAtTime(0.06, now + 0.1);
-            gain.gain.exponentialRampToValueAtTime(0.01, now + 3.0);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(now);
-            osc.stop(now + 3.5);
-        });
     } else {
-        for (let i = 0; i < 5; i++) {
-          const startTime = now + (i * 0.4);
-          [880, 1100, 1320].forEach(freq => {
+        // ALARM SOUND: デジタル的な2音の繰り返し
+        for (let i = 0; i < 8; i++) {
+          const startTime = now + (i * 0.5);
+          [880, 1320].forEach((freq, idx) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = 'square';
-            osc.frequency.setValueAtTime(freq, startTime);
-            osc.frequency.exponentialRampToValueAtTime(freq / 2, startTime + 0.3);
-            gain.gain.setValueAtTime(0.05, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+            osc.frequency.setValueAtTime(idx === 0 ? freq : freq * 1.2, startTime);
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.2, startTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.4);
             osc.connect(gain);
             gain.connect(ctx.destination);
             osc.start(startTime);
-            osc.stop(startTime + 0.3);
+            osc.stop(startTime + 0.45);
           });
         }
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error("Emergency sound playback failed:", e);
+  }
 };
 
 const App: React.FC = () => {
@@ -98,7 +109,6 @@ const App: React.FC = () => {
   const [isDisplaySettingsOpen, setIsDisplaySettingsOpen] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   
-  // 背景動画専用の音量設定
   const [bgVolume, setBgVolume] = useState(0.3);
   const [isBgMuted, setIsBgMuted] = useState(true);
   
@@ -112,7 +122,6 @@ const App: React.FC = () => {
   const [bgDimming, setBgDimming] = useState(0.85);
   const [bgBlur, setBgBlur] = useState(4);
 
-  // 背景スライドショー/ループ設定
   const [isSlideshowActive, setIsSlideshowActive] = useState(true);
   const [slideshowInterval, setSlideshowInterval] = useState(30);
   const [isShuffle, setIsShuffle] = useState(false);
@@ -144,7 +153,6 @@ const App: React.FC = () => {
     if (savedDim) setBgDimming(parseFloat(savedDim));
     if (savedBlur) setBgBlur(parseFloat(savedBlur));
     
-    // 背景設定の読み込み
     const savedBgVol = localStorage.getItem('bg_volume');
     const savedShuffle = localStorage.getItem('bg_shuffle');
     if (savedBgVol) setBgVolume(parseFloat(savedBgVol));
@@ -156,7 +164,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('bg_volume', bgVolume.toString()); }, [bgVolume]);
   useEffect(() => { localStorage.setItem('bg_shuffle', isShuffle.toString()); }, [isShuffle]);
 
-  // EEW バックグラウンド監視（常に実行）
+  // EEW 監視
   useEffect(() => {
     if (!isSystemStarted) return;
     const fetchEEWGlobal = async () => {
@@ -220,6 +228,7 @@ const App: React.FC = () => {
 
   const handleForceSync = () => {
     setIsSyncing(true);
+    // イベントを発火：useClockフックや各ウィジェットが受信する
     window.dispatchEvent(new CustomEvent('system-sync'));
     setTimeout(() => setIsSyncing(false), 1000);
   };
@@ -245,7 +254,6 @@ const App: React.FC = () => {
     if (isSlideshowActive && bgAssets.length > 1 && isSystemStarted) {
         slideshowTimerRef.current = setInterval(() => {
             const current = bgAssets[currentBgIndex];
-            // 動画再生中かつループ再生中でない場合は動画終了を待つ
             if (current?.type === 'video' && videoRef.current && !videoRef.current.paused && !videoRef.current.ended) return;
             nextBackground();
         }, slideshowInterval * 1000);
@@ -262,7 +270,21 @@ const App: React.FC = () => {
     }
   }, [bgVolume, isBgMuted, currentBgIndex, isSystemStarted]);
 
-  const handleStartSystem = () => {
+  const handleStartSystem = async () => {
+    // AudioContextを初期化してアンロック
+    const ctx = getAudioContext();
+    if (ctx) {
+      // resumeはユーザーアクション内で行う必要がある
+      await ctx.resume();
+      // 一瞬だけ無音を流してアンロックを確実にする
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, ctx.currentTime);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    }
     setIsSystemStarted(true);
     setIsBgMuted(false);
     setShowTutorial(false);
@@ -301,7 +323,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-slate-200 flex flex-col items-center p-4 md:p-8 relative overflow-y-auto overflow-x-hidden font-sans">
       
-      {/* EEW オーバーレイ */}
       {activeEEW && (
         <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-red-600/95 backdrop-blur-3xl animate-[pulse_0.4s_infinite]">
             <div className="flex flex-col items-center gap-10 p-8 md:p-20 border-[12px] border-white shadow-[0_0_150px_rgba(255,255,255,0.8)] max-w-[95vw] text-center">
@@ -361,7 +382,9 @@ const App: React.FC = () => {
         <div className="fixed bottom-24 right-6 bg-black/95 border border-slate-700 p-4 rounded-sm z-[60] shadow-2xl w-80 backdrop-blur-xl max-h-[70vh] overflow-y-auto custom-scrollbar">
             <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-4 border-b border-slate-800 pb-2 flex justify-between items-center">
               <span>SYSTEM CONFIGURATION</span>
-              <button onClick={handleForceSync} className="text-[8px] bg-cyan-900/30 px-2 py-0.5 border border-cyan-800 hover:bg-cyan-500 hover:text-black transition-all">FORCE SYNC</button>
+              <button onClick={handleForceSync} disabled={isSyncing} className={`text-[8px] px-2 py-0.5 border transition-all ${isSyncing ? 'bg-cyan-500 text-black border-cyan-400' : 'bg-cyan-900/30 border-cyan-800 text-cyan-400 hover:bg-cyan-500 hover:text-black'}`}>
+                {isSyncing ? 'SYNCING...' : 'FORCE SYNC'}
+              </button>
             </h4>
             
             <div className="space-y-4">
@@ -385,7 +408,12 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 背景アセットの制御（ループ・音量・シャッフル） */}
+                <div className="pt-3 border-t border-slate-800">
+                  <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">System Diagnostics</h4>
+                  <button onClick={() => playEmergencySound('ALARM')} className="w-full text-[8px] py-1.5 border border-cyan-900/50 text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all font-bold tracking-widest uppercase mb-2">Test Alarm Sound</button>
+                  <button onClick={() => playEmergencySound('EEW')} className="w-full text-[8px] py-1.5 border border-red-900/50 text-red-500 hover:bg-red-500 hover:text-white transition-all font-bold tracking-widest uppercase">Test EEW Alert Sound</button>
+                </div>
+
                 {bgAssets.length > 0 && (
                    <div className="pt-3 border-t border-slate-800">
                       <h4 className="text-cyan-400 font-digital tracking-widest text-[10px] font-bold mb-3 uppercase">Background Media Controls</h4>
@@ -418,7 +446,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* コントロールパネル：MP3、設定、アセット追加 */}
       <div className="fixed bottom-6 right-6 flex gap-3 z-50 opacity-20 hover:opacity-100 transition-opacity duration-300">
         <button onClick={() => setIsDisplaySettingsOpen(!isDisplaySettingsOpen)} title="Configuration" className="text-slate-400 hover:text-white p-3 rounded-full border border-slate-700 bg-gray-900/80 transition-all hover:border-cyan-500/50">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>

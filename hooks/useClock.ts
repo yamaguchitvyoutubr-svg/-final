@@ -37,6 +37,9 @@ export const useClock = () => {
     // 手動同期イベントのリスナー
     const handleManualSync = () => {
       console.log("SYSTEM CLOCK MANUAL RESYNC");
+      // 即座に現在の時刻をセットしてUIを更新
+      setDate(new Date());
+      // タイマーサイクルをリセットして同期
       startClock();
     };
     window.addEventListener('system-sync', handleManualSync);
