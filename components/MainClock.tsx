@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 
 interface MainClockProps {
   date: Date;
@@ -47,11 +47,15 @@ const CalendarWidget: React.FC<{ date: Date }> = ({ date }) => {
 };
 
 const CountdownWidget: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
-    const targetDate = localStorage.getItem('system_countdown_target') || "";
+    const [targetDateStr, setTargetDateStr] = useState<string>(localStorage.getItem('system_countdown_target') || "");
+    const [isEditing, setIsEditing] = useState(false);
+
     const timeLeft = useMemo(() => {
         let target: number;
-        if (targetDate) target = new Date(targetDate).getTime();
-        else {
+        if (targetDateStr) {
+            target = new Date(targetDateStr).getTime();
+        } else {
+            // デフォルト: 翌日午前0時
             const nextMidnight = new Date(currentDate);
             nextMidnight.setHours(24, 0, 0, 0);
             target = nextMidnight.getTime();
@@ -65,30 +69,78 @@ const CountdownWidget: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
             s: Math.floor((diff / 1000) % 60),
             expired: false
         };
-    }, [targetDate, currentDate]);
+    }, [targetDateStr, currentDate]);
+
+    const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const newTarget = formData.get('target') as string;
+        setTargetDateStr(newTarget);
+        localStorage.setItem('system_countdown_target', newTarget);
+        setIsEditing(false);
+    };
+
+    const handleReset = () => {
+        setTargetDateStr("");
+        localStorage.removeItem('system_countdown_target');
+        setIsEditing(false);
+    };
 
     return (
-        <div className="hidden lg:flex flex-col items-start justify-center w-48 gap-4 select-none">
+        <div className="hidden lg:flex flex-col items-start justify-center w-48 gap-4 select-none relative group">
             <div className="w-full">
-                <div className="text-[10px] text-cyan-600 tracking-widest font-mono mb-2 border-b border-slate-800 pb-1">COUNTDOWN</div>
-                <div className="space-y-3">
-                    <div className="flex flex-col gap-2 border-l border-slate-800 pl-3">
-                        <div className="flex justify-between items-baseline">
-                            <span className="text-[24px] font-digital text-white leading-none italic">{timeLeft.d}</span>
-                            <span className="text-[8px] text-slate-500 tracking-widest">DAYS</span>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                            <div className="flex gap-2 font-digital text-lg text-cyan-400 italic">
-                                <span>{timeLeft.h.toString().padStart(2, '0')}</span>
-                                <span className="animate-pulse">:</span>
-                                <span>{timeLeft.m.toString().padStart(2, '0')}</span>
-                                <span className="animate-pulse">:</span>
-                                <span>{timeLeft.s.toString().padStart(2, '0')}</span>
-                            </div>
-                            <span className="text-[8px] text-slate-600 font-mono uppercase">T-MINUS</span>
-                        </div>
-                    </div>
+                <div className="flex justify-between items-end border-b border-slate-800 pb-1 mb-2">
+                    <div className="text-[10px] text-cyan-600 tracking-widest font-mono">COUNTDOWN</div>
+                    {!isEditing && (
+                        <button 
+                            onClick={() => setIsEditing(true)} 
+                            className="text-[8px] text-slate-600 hover:text-cyan-400 transition-colors uppercase font-bold tracking-tighter opacity-0 group-hover:opacity-100"
+                        >
+                            [EDIT]
+                        </button>
+                    )}
                 </div>
+
+                {isEditing ? (
+                    <form onSubmit={handleSave} className="space-y-2 animate-[fadeIn_0.2s]">
+                        <input 
+                            name="target"
+                            type="datetime-local" 
+                            defaultValue={targetDateStr}
+                            className="w-full bg-slate-900 border border-slate-700 text-[10px] text-white p-1 rounded-sm focus:border-cyan-500 outline-none"
+                        />
+                        <div className="flex gap-1">
+                            <button type="submit" className="flex-1 bg-cyan-900/30 text-cyan-400 text-[8px] py-1 border border-cyan-800 hover:bg-cyan-500 hover:text-black transition-all">SET</button>
+                            <button type="button" onClick={handleReset} className="flex-1 bg-red-900/30 text-red-400 text-[8px] py-1 border border-red-800 hover:bg-red-500 hover:text-white transition-all">RESET</button>
+                        </div>
+                    </form>
+                ) : (
+                    <div className="space-y-3">
+                        <div className="flex flex-col gap-2 border-l border-slate-800 pl-3">
+                            <div className="flex justify-between items-baseline">
+                                <span className={`text-[24px] font-digital leading-none italic ${timeLeft.expired ? 'text-red-500' : 'text-white'}`}>
+                                    {timeLeft.d}
+                                </span>
+                                <span className="text-[8px] text-slate-500 tracking-widest">DAYS</span>
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                                <div className={`flex gap-2 font-digital text-lg italic ${timeLeft.expired ? 'text-red-950' : 'text-cyan-400'}`}>
+                                    <span>{timeLeft.h.toString().padStart(2, '0')}</span>
+                                    <span className="animate-pulse">:</span>
+                                    <span>{timeLeft.m.toString().padStart(2, '0')}</span>
+                                    <span className="animate-pulse">:</span>
+                                    <span>{timeLeft.s.toString().padStart(2, '0')}</span>
+                                </div>
+                                <span className="text-[8px] text-slate-600 font-mono uppercase">T-MINUS</span>
+                            </div>
+                        </div>
+                        {targetDateStr && (
+                             <div className="text-[7px] text-slate-700 font-mono tracking-widest uppercase pl-3">
+                                Target: {targetDateStr.replace('T', ' ')}
+                             </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
