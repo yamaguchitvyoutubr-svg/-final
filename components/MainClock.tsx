@@ -49,7 +49,7 @@ const CitySearchOverlay: React.FC<{
                         key={r.id} 
                         onClick={() => onSelect({
                             id: r.id.toString(),
-                            label: r.name.substring(0, 3).toUpperCase(),
+                            label: r.name.toUpperCase(), // フルネームをメインラベルに使用
                             subLabel: `${r.name.toUpperCase()} / ${r.country?.toUpperCase() || '---'}`,
                             zone: r.timezone,
                             lat: r.latitude,
@@ -77,13 +77,21 @@ const SubClock: React.FC<{ config: TimeZoneConfig; date: Date; color: string; on
     }).format(date);
   }, [date, config.zone]);
 
+  // subLabelがあればそこから都市名を取得、なければlabelを使用
+  const cityName = useMemo(() => {
+    if (config.subLabel) {
+      return config.subLabel.split('/')[0].trim();
+    }
+    return config.label;
+  }, [config]);
+
   return (
     <div 
         onClick={onEdit}
         className="flex flex-col items-center px-4 md:px-10 border-x border-slate-900/30 first:border-l-0 last:border-r-0 cursor-pointer hover:bg-white/5 transition-colors group"
     >
-      <span className={`text-[8px] md:text-[9px] tracking-[0.4em] font-bold ${color} mb-1 opacity-70 uppercase group-hover:opacity-100 group-hover:text-cyan-400`}>
-          {config.label} / {config.id.substring(0, 2).toUpperCase()}
+      <span className={`text-[8px] md:text-[10px] tracking-[0.3em] font-bold ${color} mb-1 opacity-70 uppercase group-hover:opacity-100 group-hover:text-cyan-400 transition-all`}>
+          {cityName}
       </span>
       <span className="font-digital text-lg md:text-3xl tracking-[0.1em] text-slate-300 tabular-nums font-medium group-hover:text-white">
         {time}
@@ -197,11 +205,11 @@ const CountdownWidget: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
 export const MainClock: React.FC<MainClockProps> = ({ date }) => {
   const [sub1, setSub1] = useState<TimeZoneConfig>(() => {
     const saved = localStorage.getItem('main_sub1');
-    return saved ? JSON.parse(saved) : { id: 'ru', label: 'MOW', zone: 'Europe/Moscow' };
+    return saved ? JSON.parse(saved) : { id: 'ru', label: 'MOSCOW', zone: 'Europe/Moscow', subLabel: 'MOSCOW / RUSSIA' };
   });
   const [sub2, setSub2] = useState<TimeZoneConfig>(() => {
     const saved = localStorage.getItem('main_sub2');
-    return saved ? JSON.parse(saved) : { id: 'us-ny', label: 'NYC', zone: 'America/New_York' };
+    return saved ? JSON.parse(saved) : { id: 'us-ny', label: 'NEW YORK', zone: 'America/New_York', subLabel: 'NEW YORK / USA' };
   });
   const [editingSlot, setEditingSlot] = useState<number | null>(null);
 
