@@ -22,7 +22,11 @@ const PREF_MAP: Record<string, string> = {
   "徳島": "TOKUSHIMA", "香川": "KAGAWA", "愛媛": "EHIME", "高知": "KOCHI", "福岡": "FUKUOKA",
   "佐賀": "SAGA", "長崎": "NAGASAKI", "熊本": "KUMAMOTO", "大分": "OITA", "宮崎": "MIYAZAKI",
   "鹿児島": "KAGOSHIMA", "沖縄": "OKINAWA",
-  "トカラ": "TOKARA", "奄美": "AMAMI"
+  "トカラ": "TOKARA", "奄美": "AMAMI",
+  "福島県中通り": "FUKUSHIMA NAKADORI",
+  "宗谷地方": "SOYA REGION",
+  "中越": "CHUETSU",
+  "有明海": "ARIAKE SEA"
 };
 
 const SUFFIX_MAP: Record<string, string> = {
@@ -34,14 +38,21 @@ const SUFFIX_MAP: Record<string, string> = {
   "北部": " NORTH", "南部": " SOUTH", "東部": " EAST", "西部": " WEST", "中部": " CENTRAL",
   "北東": " NORTH EAST", "北西": " NORTH WEST", "南東": " SOUTH EAST", "南西": " SOUTH WEST",
   "地方": " REGION", "半島": " PENINSULA", "島": " ISLAND",
-  "北": " NORTH", "南": " SOUTH", "東": " EAST", "西": " WEST"
+  "北": " NORTH", "南": " SOUTH", "東": " EAST", "西": " WEST",
+  "中南部": " CENTRAL SOUTH"
 };
 
 const translateText = (japaneseText: string): string => {
   if (!japaneseText) return "";
   let text = japaneseText;
-  Object.keys(PREF_MAP).forEach(key => { text = text.split(key).join(PREF_MAP[key]); });
-  Object.keys(SUFFIX_MAP).forEach(key => { text = text.split(key).join(SUFFIX_MAP[key]); });
+  
+  // 置換の優先順位（長いキーワードを先に処理）を考慮してマッピングをソート
+  const sortedPrefs = Object.keys(PREF_MAP).sort((a, b) => b.length - a.length);
+  const sortedSuffixes = Object.keys(SUFFIX_MAP).sort((a, b) => b.length - a.length);
+
+  sortedPrefs.forEach(key => { text = text.split(key).join(PREF_MAP[key]); });
+  sortedSuffixes.forEach(key => { text = text.split(key).join(SUFFIX_MAP[key]); });
+  
   text = text.replace(/\s+/g, ' ').trim();
   return text.toUpperCase();
 };
@@ -49,6 +60,7 @@ const translateText = (japaneseText: string): string => {
 export const EarthquakeWidget: React.FC = () => {
   const [eewData, setEewData] = useState<EEWData | null>(null);
   const [testMode, setTestMode] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
 
   const fetchEEW = useCallback(async (silent = true) => {
       if (testMode) return;
@@ -60,6 +72,8 @@ export const EarthquakeWidget: React.FC = () => {
         if (!contentType || !contentType.includes("application/json")) return;
 
         const json = await res.json();
+        setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        
         if (Array.isArray(json) && json.length > 0) {
             const latestEEW = json[0];
             const diff = (Date.now() - new Date(latestEEW.time).getTime()) / 1000;
@@ -83,8 +97,17 @@ export const EarthquakeWidget: React.FC = () => {
 
   useEffect(() => {
       const interval = setInterval(() => fetchEEW(true), 5000);
-      fetchEEW(true); 
-      return () => clearInterval(interval);
+      fetchEEW(true);
+
+      const handleSystemSync = () => {
+          fetchEEW(false);
+      };
+      window.addEventListener('system-sync', handleSystemSync);
+
+      return () => {
+          clearInterval(interval);
+          window.removeEventListener('system-sync', handleSystemSync);
+      };
   }, [fetchEEW]);
 
   const toggleTestMode = () => {
@@ -93,15 +116,14 @@ export const EarthquakeWidget: React.FC = () => {
       const testEew = { 
         type: 'EEW', 
         time: new Date().toISOString(), 
-        hypocenter: "TEST AREA", 
+        hypocenter: translateText("福島県中通り近海 中南部"), 
         cancelled: false, 
         isWarning: true 
       };
       setEewData(testEew as EEWData);
       
-      // システム全体の警報テストを発火（音とオーバーレイ）
       window.dispatchEvent(new CustomEvent('test-eew-trigger', { 
-        detail: { hypocenter: "TEST AREA (SIMULATION)", time: testEew.time } 
+        detail: { hypocenter: "FUKUSHIMA NAKADORI OFF CENTRAL SOUTH", time: testEew.time } 
       }));
     } else {
       setTestMode(false);
@@ -119,7 +141,7 @@ export const EarthquakeWidget: React.FC = () => {
       <div className="w-full flex justify-between items-end mb-1 px-1">
           <div className="flex gap-2">
             <div className={`text-[9px] tracking-widest px-3 py-0.5 rounded-t-sm transition-all border-t border-x ${isEEWActive ? 'bg-red-600 text-white border-red-500 animate-pulse' : 'bg-[#0a0a0a] text-slate-500 border-slate-800'}`}>
-                EEW MONITOR (554)
+                EEW MONITOR {lastSync && `[SYNC: ${lastSync}]`}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -145,7 +167,7 @@ export const EarthquakeWidget: React.FC = () => {
                 </div>
                 <div className="flex-1 flex flex-col items-center z-10 text-center px-2">
                     <span className="text-[10px] text-red-500/80 tracking-widest uppercase font-bold animate-pulse">EARTHQUAKE EARLY WARNING</span>
-                    <span className="font-sans font-black tracking-tighter text-2xl text-white">{eewData?.hypocenter}</span>
+                    <span className="font-sans font-black tracking-tighter text-2xl text-white break-words leading-tight">{eewData?.hypocenter}</span>
                 </div>
                 <div className="flex flex-col items-end z-10 min-w-[80px]">
                     <span className="text-[10px] text-red-500 tracking-widest uppercase mb-0.5 font-bold">STATUS</span>
@@ -155,7 +177,7 @@ export const EarthquakeWidget: React.FC = () => {
         ) : (
             <div className="w-full flex items-center justify-center">
                 <span className="text-slate-600 tracking-[0.5em] text-[10px] font-mono uppercase italic animate-pulse">
-                    Monitoring P2PQuake Code 554 Feed...
+                    Monitoring P2PQuake Feed...
                 </span>
             </div>
         )}

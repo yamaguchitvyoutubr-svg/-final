@@ -11,12 +11,12 @@ export const WORLD_ZONES: TimeZoneConfig[] = [
     lon: 139.6917,
   },
   {
-    id: 'uk',
-    label: 'LON',
-    subLabel: 'LONDON / UTC',
-    zone: 'Europe/London',
-    lat: 51.5074,
-    lon: -0.1278,
+    id: 'ru',
+    label: 'MOW',
+    subLabel: 'MOSCOW / RUSSIA',
+    zone: 'Europe/Moscow',
+    lat: 55.7558,
+    lon: 37.6173,
   },
   {
     id: 'sg',
@@ -27,11 +27,11 @@ export const WORLD_ZONES: TimeZoneConfig[] = [
     lon: 103.8198,
   },
   {
-    id: 'us-dc',
-    label: 'WAS',
-    subLabel: 'WASHINGTON D.C.',
+    id: 'us-ny',
+    label: 'NYC',
+    subLabel: 'NEW YORK / USA',
     zone: 'America/New_York',
-    lat: 38.8951,
-    lon: -77.0364,
+    lat: 40.7128,
+    lon: -74.0060,
   }
 ];
