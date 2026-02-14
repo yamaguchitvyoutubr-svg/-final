@@ -6,6 +6,11 @@ interface MainClockProps {
   date: Date;
 }
 
+/**
+ * 都市検索オーバーレイ: 
+ * Open-MeteoのジオコーディングAPIを使用して、英語の都市名から
+ * タイムゾーンや位置情報を検索し、選択するための画面です。
+ */
 const CitySearchOverlay: React.FC<{ 
     onSelect: (config: TimeZoneConfig) => void; 
     onClose: () => void;
@@ -15,17 +20,20 @@ const CitySearchOverlay: React.FC<{
     const [loading, setLoading] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // 開始時に検索窓にフォーカスを当てる
     useEffect(() => { inputRef.current?.focus(); }, []);
 
+    // APIを叩いて都市を検索する処理
     const search = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!query.trim()) return;
         setLoading(true);
         try {
+            // 無料のジオコーディングAPIを使用
             const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=en&format=json`);
             const data = await res.json();
             setResults(data.results || []);
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Search error:", e); }
         setLoading(false);
     };
 
@@ -49,7 +57,7 @@ const CitySearchOverlay: React.FC<{
                         key={r.id} 
                         onClick={() => onSelect({
                             id: r.id.toString(),
-                            label: r.name.toUpperCase(), // フルネームをメインラベルに使用
+                            label: r.name.toUpperCase(), // 選択された都市名をラベルにセット
                             subLabel: `${r.name.toUpperCase()} / ${r.country?.toUpperCase() || '---'}`,
                             zone: r.timezone,
                             lat: r.latitude,
@@ -66,7 +74,12 @@ const CitySearchOverlay: React.FC<{
     );
 };
 
+/**
+ * サブクロック（メイン時計の下にある小さな時計）:
+ * ユーザーがクリックすることで、その場所の都市を変更できます。
+ */
 const SubClock: React.FC<{ config: TimeZoneConfig; date: Date; color: string; onEdit: () => void }> = ({ config, date, color, onEdit }) => {
+  // 指定されたタイムゾーンの時刻を計算
   const time = useMemo(() => {
     return new Intl.DateTimeFormat('en-GB', {
       timeZone: config.zone,
@@ -77,7 +90,7 @@ const SubClock: React.FC<{ config: TimeZoneConfig; date: Date; color: string; on
     }).format(date);
   }, [date, config.zone]);
 
-  // subLabelがあればそこから都市名を取得、なければlabelを使用
+  // 表示用の都市名を抽出（国名を含まない形式）
   const cityName = useMemo(() => {
     if (config.subLabel) {
       return config.subLabel.split('/')[0].trim();
@@ -100,6 +113,10 @@ const SubClock: React.FC<{ config: TimeZoneConfig; date: Date; color: string; on
   );
 };
 
+/**
+ * カレンダー表示モジュール: 
+ * 現在の日付・月・年・曜日をスタイリッシュに表示します。
+ */
 const CalendarWidget: React.FC<{ date: Date }> = ({ date }) => {
     const month = useMemo(() => new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date).toUpperCase(), [date]);
     const day = useMemo(() => date.getDate().toString().padStart(2, '0'), [date]);
@@ -120,15 +137,22 @@ const CalendarWidget: React.FC<{ date: Date }> = ({ date }) => {
     );
 };
 
+/**
+ * カウントダウンウィジェット: 
+ * 目標時刻までの残り時間を計算します。デフォルトは翌日の0時です。
+ */
 const CountdownWidget: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
+    // localStorageから保存された目標時間を取得
     const [targetDateStr, setTargetDateStr] = useState<string>(localStorage.getItem('system_countdown_target') || "");
     const [isEditing, setIsEditing] = useState(false);
 
+    // 残り時間の計算ロジック
     const timeLeft = useMemo(() => {
         let target: number;
         if (targetDateStr) {
             target = new Date(targetDateStr).getTime();
         } else {
+            // 目標設定がない場合は「今日の深夜0時」をデフォルトに
             const nextMidnight = new Date(currentDate);
             nextMidnight.setHours(24, 0, 0, 0);
             target = nextMidnight.getTime();
@@ -144,6 +168,7 @@ const CountdownWidget: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
         };
     }, [targetDateStr, currentDate]);
 
+    // 保存処理
     const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
@@ -155,6 +180,7 @@ const CountdownWidget: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
         setIsEditing(false);
     };
 
+    // リセット処理
     const handleReset = () => {
         setTargetDateStr("");
         localStorage.removeItem('system_countdown_target');
@@ -202,17 +228,25 @@ const CountdownWidget: React.FC<{ currentDate: Date }> = ({ currentDate }) => {
     );
 };
 
+/**
+ * メインクロックコンポーネント: 
+ * 画面中央の巨大なデジタル時計と、その下の2つのサブ時計、カレンダー、カウントダウンを統合します。
+ */
 export const MainClock: React.FC<MainClockProps> = ({ date }) => {
+  // サブ時計1の状態管理（localStorageから復元）
   const [sub1, setSub1] = useState<TimeZoneConfig>(() => {
     const saved = localStorage.getItem('main_sub1');
     return saved ? JSON.parse(saved) : { id: 'ru', label: 'MOSCOW', zone: 'Europe/Moscow', subLabel: 'MOSCOW / RUSSIA' };
   });
+  // サブ時計2の状態管理（localStorageから復元）
   const [sub2, setSub2] = useState<TimeZoneConfig>(() => {
     const saved = localStorage.getItem('main_sub2');
     return saved ? JSON.parse(saved) : { id: 'us-ny', label: 'NEW YORK', zone: 'America/New_York', subLabel: 'NEW YORK / USA' };
   });
+  // 現在どのスロットを編集中か（1または2、編集してなければnull）
   const [editingSlot, setEditingSlot] = useState<number | null>(null);
 
+  // 設定変更時にlocalStorageへ自動保存
   useEffect(() => { localStorage.setItem('main_sub1', JSON.stringify(sub1)); }, [sub1]);
   useEffect(() => { localStorage.setItem('main_sub2', JSON.stringify(sub2)); }, [sub2]);
 
@@ -227,6 +261,7 @@ export const MainClock: React.FC<MainClockProps> = ({ date }) => {
 
   return (
     <div className="flex flex-col items-center justify-center w-full max-w-[95%] gap-6 md:gap-16 animate-[fadeIn_1s_ease-out] relative">
+        {/* 都市編集中の場合に検索窓を重ねて表示 */}
         {editingSlot !== null && (
             <div className="absolute inset-x-0 -top-20 z-[110] flex justify-center">
                 <div className="w-80 h-64 shadow-2xl">
@@ -251,6 +286,7 @@ export const MainClock: React.FC<MainClockProps> = ({ date }) => {
                     {timeString}
                     <span className="hidden md:inline-block absolute right-0 top-1/2 -translate-y-1/2 text-slate-900 text-6xl font-thin opacity-20">]</span>
                 </div>
+                {/* サブ表示エリア：各都市をクリックして編集可能 */}
                 <div className="mt-4 md:mt-6 flex flex-row justify-center gap-2">
                     <SubClock config={sub1} date={date} color="text-slate-400" onEdit={() => setEditingSlot(1)} />
                     <SubClock config={sub2} date={date} color="text-cyan-500/80" onEdit={() => setEditingSlot(2)} />

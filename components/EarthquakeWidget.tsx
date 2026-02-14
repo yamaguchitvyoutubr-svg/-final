@@ -11,6 +11,10 @@ interface EEWData {
   isWarning: boolean; 
 }
 
+/**
+ * 翻訳用辞書 (Prefectures / Regions): 
+ * P2P地震情報の日本語地名をスタイリッシュな英語に変換するためのマップです。
+ */
 const PREF_MAP: Record<string, string> = {
   "北海道": "HOKKAIDO", "青森": "AOMORI", "岩手": "IWATE", "宮城": "MIYAGI", "秋田": "AKITA",
   "山形": "YAMAGATA", "福島": "FUKUSHIMA", "茨城": "IBARAKI", "栃木": "TOCHIGI", "群馬": "GUNMA",
@@ -29,6 +33,10 @@ const PREF_MAP: Record<string, string> = {
   "有明海": "ARIAKE SEA"
 };
 
+/**
+ * 補助的な用語のマップ (Suffixes / Locations):
+ * 「近海」「中南部」などの詳細情報を変換します。
+ */
 const SUFFIX_MAP: Record<string, string> = {
   "県": " PREF", "府": " PREF", "都": " METRO", "道": "", 
   "日本海": " SEA OF JAPAN", "太平洋": " PACIFIC", "オホーツク海": " OKHOTSK", "東シナ海": " EAST CHINA SEA",
@@ -42,11 +50,14 @@ const SUFFIX_MAP: Record<string, string> = {
   "中南部": " CENTRAL SOUTH"
 };
 
+/**
+ * 日本語の地名を英語（大文字）に変換するユーティリティ
+ */
 const translateText = (japaneseText: string): string => {
   if (!japaneseText) return "";
   let text = japaneseText;
   
-  // 置換の優先順位（長いキーワードを先に処理）を考慮してマッピングをソート
+  // 文字数の長いキーワードから優先的に置換（誤変換を防ぐため）
   const sortedPrefs = Object.keys(PREF_MAP).sort((a, b) => b.length - a.length);
   const sortedSuffixes = Object.keys(SUFFIX_MAP).sort((a, b) => b.length - a.length);
 
@@ -57,13 +68,18 @@ const translateText = (japaneseText: string): string => {
   return text.toUpperCase();
 };
 
+/**
+ * 緊急地震速報 (EEW) モニターコンポーネント:
+ * P2PQuake APIを定期的にチェックし、最新の震源情報をリアルタイムに表示します。
+ */
 export const EarthquakeWidget: React.FC = () => {
   const [eewData, setEewData] = useState<EEWData | null>(null);
   const [testMode, setTestMode] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
 
+  // APIから情報を取得するメイン処理
   const fetchEEW = useCallback(async (silent = true) => {
-      if (testMode) return;
+      if (testMode) return; // テスト中は実際のAPI取得を無視
       try {
         const res = await fetch('https://api.p2pquake.net/v2/history?codes=554&limit=1', { cache: 'no-store' });
         
@@ -76,6 +92,7 @@ export const EarthquakeWidget: React.FC = () => {
         
         if (Array.isArray(json) && json.length > 0) {
             const latestEEW = json[0];
+            // 情報の鮮度（180秒以内）をチェック
             const diff = (Date.now() - new Date(latestEEW.time).getTime()) / 1000;
             
             if (diff < 180 && !latestEEW.cancelled && latestEEW.earthquake) {
@@ -96,6 +113,7 @@ export const EarthquakeWidget: React.FC = () => {
   }, [testMode]);
 
   useEffect(() => {
+      // 5秒おきにチェック
       const interval = setInterval(() => fetchEEW(true), 5000);
       fetchEEW(true);
 
@@ -110,6 +128,7 @@ export const EarthquakeWidget: React.FC = () => {
       };
   }, [fetchEEW]);
 
+  // デバッグ用のテストアラート発火処理
   const toggleTestMode = () => {
     if (!testMode) {
       setTestMode(true);
@@ -122,6 +141,7 @@ export const EarthquakeWidget: React.FC = () => {
       };
       setEewData(testEew as EEWData);
       
+      // システム全体に地震速報イベントを飛ばす（警告音のトリガー）
       window.dispatchEvent(new CustomEvent('test-eew-trigger', { 
         detail: { hypocenter: "FUKUSHIMA NAKADORI OFF CENTRAL SOUTH", time: testEew.time } 
       }));

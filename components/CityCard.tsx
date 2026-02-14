@@ -9,6 +9,11 @@ interface CityCardProps {
   onEdit: (newConf: TimeZoneConfig) => void;
 }
 
+/**
+ * 世界時計カードコンポーネント:
+ * 各都市の時刻、天気、現地との時差を表示します。
+ * 都市名部分をクリックすると、別の都市に検索・変更できます。
+ */
 export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) => {
   const [weather, setWeather] = useState<{ temp: number; code: number } | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -19,8 +24,9 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) 
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Time calculation
+  // 時刻および時差の計算
   const { time, dateDiff } = useMemo(() => {
+    // タイムゾーンを指定して時刻文字列を生成
     const timeFormatter = new Intl.DateTimeFormat('en-GB', {
       timeZone: config.zone,
       hour: '2-digit',
@@ -29,7 +35,7 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) 
       hour12: false,
     });
     
-    // Get target time details
+    // 対象都市と現地（ブラウザ設定）の差分を計算
     const targetString = new Intl.DateTimeFormat('en-US', {
         timeZone: config.zone,
         year: 'numeric', month: 'numeric', day: 'numeric',
@@ -44,6 +50,7 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) 
     const localDate = new Date(localString);
     const diffHours = Math.round((targetDate.getTime() - localDate.getTime()) / (1000 * 60 * 60));
 
+    // 「昨日」「今日」「明日」のラベル判定
     let dayLabel = "TODAY";
     if (targetDate.getDate() !== localDate.getDate()) {
         dayLabel = diffHours > 0 ? "TOMORROW" : "YESTERDAY";
@@ -55,6 +62,7 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) 
     };
   }, [config.zone, baseDate]);
 
+  // 気象データをAPIから取得
   const fetchWeather = useCallback(async () => {
     if (!config.lat) return;
     setIsLoading(true);
@@ -65,16 +73,21 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) 
         setWeather({ temp: data.current.temperature_2m, code: data.current.weather_code });
         setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       }
-    } catch (e) {} finally { setIsLoading(false); }
+    } catch (e) {
+      console.warn("Weather fetch failed for", config.label);
+    } finally { setIsLoading(false); }
   }, [config.lat, config.lon]);
 
+  // 初回および定期的な天気更新
   useEffect(() => { 
     fetchWeather();
     const h = () => fetchWeather();
+    // システム全体の同期イベントを受信した際も更新
     window.addEventListener('system-sync', h);
     return () => window.removeEventListener('system-sync', h);
   }, [fetchWeather]);
 
+  // カード内での都市検索処理
   const searchCities = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -85,10 +98,12 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) 
     } catch (e) { console.error(e); }
   };
 
+  // 悪天候（雷雨など）かどうかの判定
   const isSevere = weather ? (weather.code >= 95 || (weather.code >= 66 && weather.code <= 67) || (weather.code >= 56 && weather.code <= 57)) : false;
 
   return (
     <div className={`border p-3 flex flex-col justify-between h-32 md:h-36 relative group overflow-hidden rounded-sm transition-all duration-300 ${isSevere ? 'bg-red-950/20 border-red-900' : 'bg-[#161616] border-[#2a2a2a] hover:border-cyan-500/50'}`}>
+      {/* 編集モード時の検索UI */}
       {isSearching && (
         <div className="absolute inset-0 z-50 bg-black/95 p-3 flex flex-col animate-[fadeIn_0.2s]">
             <form onSubmit={searchCities} className="flex gap-1 mb-2">
@@ -122,6 +137,7 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) 
         </div>
       )}
 
+      {/* ヘッダー情報（都市名・天気） */}
       <div className="flex justify-between items-start z-10 w-full">
         <div className="flex flex-col cursor-pointer" onClick={() => { setIsSearching(true); setSearchQuery(''); setSearchResults([]); }}>
             <h3 className="text-slate-300 font-sans font-bold text-base tracking-wider leading-none group-hover:text-cyan-400 transition-colors">{config.label}</h3>
@@ -145,10 +161,12 @@ export const CityCard: React.FC<CityCardProps> = ({ config, baseDate, onEdit }) 
         )}
       </div>
 
+      {/* 時刻表示 */}
       <div className="flex justify-center items-center z-10 flex-grow">
          <div className="text-3xl lg:text-4xl font-digital text-white tracking-widest tabular-nums italic font-bold">{time}</div>
       </div>
 
+      {/* 時差ラベル */}
       <div className="text-center text-slate-400 text-[10px] md:text-xs font-sans z-10 tracking-wide mt-1">{dateDiff}</div>
       <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none"></div>
     </div>

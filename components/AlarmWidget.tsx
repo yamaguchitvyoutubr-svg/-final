@@ -1,3 +1,3 @@
 
-// This component has been deprecated and replaced by AlarmModule for main dashboard integration.
-export const AlarmWidget = () => null;
+// This file has been removed as it was deprecated and replaced by AlarmModule.
+export {};
