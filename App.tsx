@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MainClock } from './components/MainClock';
 import { WorldGrid } from './components/WorldGrid';
@@ -42,6 +41,42 @@ const getAudioContext = () => {
   return globalAudioCtx;
 };
 
+// アラーム音（ビープ音）を再生する関数
+const playSystemAlarmSound = () => {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  
+  try {
+    const now = ctx.currentTime;
+    // 短いビープ音を3回鳴らすパターン
+    const createBeep = (startTime: number, freq: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, startTime);
+      osc.frequency.exponentialRampToValueAtTime(freq / 2, startTime + 0.1);
+      
+      gain.gain.setValueAtTime(0.1, startTime);
+      gain.gain.linearRampToValueAtTime(0, startTime + 0.1);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(startTime);
+      osc.stop(startTime + 0.1);
+    };
+
+    // ピピピ！と鳴らす
+    createBeep(now, 1200);
+    createBeep(now + 0.15, 1200);
+    createBeep(now + 0.3, 1200);
+
+  } catch (e) {
+    console.error("Alarm sound error:", e);
+  }
+};
+
 const App: React.FC = () => {
   // 高精度な時刻同期フック
   const { date } = useClock();
@@ -56,6 +91,9 @@ const App: React.FC = () => {
   const [isSystemStarted, setIsSystemStarted] = useState(false);
   
   const [alarms, setAlarms] = useState<Alarm[]>([]);
+  const [firingAlarm, setFiringAlarm] = useState<Alarm | null>(null); // 現在鳴っているアラーム
+  const lastTriggeredTime = useRef<string>(""); // 重複発火防止用
+
   const [bgDimming, setBgDimming] = useState(0.85); // 背景の暗さ (0-1)
   const [bgBlur, setBgBlur] = useState(4);          // 背景のぼかし (px)
   const [isTransitioning, setIsTransitioning] = useState(false); // 切り替えアニメーション用フラグ
@@ -72,6 +110,8 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // アラーム音のループ再生用タイマー
+  const alarmLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // --- 初期化と保存ロジック ---
   useEffect(() => {
@@ -93,13 +133,54 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('bg_blur', bgBlur.toString()); }, [bgBlur]);
 
   /**
+   * アラーム監視ロジック (ここが重要です)
+   * 毎秒現在時刻をチェックし、設定されたアラームと一致したら発火させます
+   */
+  useEffect(() => {
+    if (!isSystemStarted) return;
+
+    const currentTimeStr = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+
+    // 同じ時刻(分)ですでに鳴らしていたらスキップ（1分間に何度も鳴らないようにする）
+    if (lastTriggeredTime.current === currentTimeStr) return;
+
+    const matchedAlarm = alarms.find(a => a.enabled && a.time === currentTimeStr);
+    
+    if (matchedAlarm) {
+      // アラーム発火
+      setFiringAlarm(matchedAlarm);
+      lastTriggeredTime.current = currentTimeStr;
+      
+      // 音を鳴らす (初回)
+      playSystemAlarmSound();
+      
+      // ループ再生を開始 (1秒間隔で音を鳴らす)
+      if (alarmLoopRef.current) clearInterval(alarmLoopRef.current);
+      alarmLoopRef.current = setInterval(() => {
+        playSystemAlarmSound();
+      }, 1000);
+    }
+  }, [date, alarms, isSystemStarted]);
+
+  // アラーム停止処理
+  const dismissAlarm = () => {
+    if (alarmLoopRef.current) {
+        clearInterval(alarmLoopRef.current);
+        alarmLoopRef.current = null;
+    }
+    setFiringAlarm(null);
+  };
+
+  /**
    * 背景切り替え処理 (ループロジック)
-   * 複数の背景がある場合、現在のアセットをフェードアウトさせて次を表示します。
    */
   const nextBackground = useCallback(() => {
     if (bgAssets.length <= 1) return;
     setIsTransitioning(true);
-    // 0.8秒のフェードアウト時間を待ってからインデックスを更新
     setTimeout(() => {
         setCurrentBgIndex(prev => (prev + 1) % bgAssets.length);
         setIsTransitioning(false);
@@ -108,14 +189,13 @@ const App: React.FC = () => {
 
   /**
    * 画像背景の自動ループタイマー
-   * 現在の背景が「画像」かつ「複数学セットされている」場合、20秒ごとに切り替えます。
    */
   useEffect(() => {
     const currentAsset = bgAssets[currentBgIndex];
     if (bgAssets.length > 1 && currentAsset?.type === 'image') {
         const timer = setTimeout(() => {
             nextBackground();
-        }, 20000); // 20秒間隔
+        }, 20000);
         return () => clearTimeout(timer);
     }
   }, [bgAssets.length, currentBgIndex, nextBackground]);
@@ -129,7 +209,7 @@ const App: React.FC = () => {
     });
   };
 
-  // システム起動（ブラウザの音声再生制限を解除）
+  // システム起動
   const handleStartSystem = async () => {
     const ctx = getAudioContext();
     if (ctx) await ctx.resume();
@@ -148,7 +228,6 @@ const App: React.FC = () => {
         label: file.name.toUpperCase()
       }));
       setBgAssets(prev => [...prev, ...newAssets]);
-      // 読み込んだ後、新しいアセットを表示
       setCurrentBgIndex(bgAssets.length);
     }
   };
@@ -158,7 +237,25 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-slate-200 flex flex-col items-center p-4 md:p-8 relative overflow-y-auto overflow-x-hidden font-sans">
       
-      {/* 緊急地震速報オーバーレイ（最前面） */}
+      {/* アラーム発火時のオーバーレイ (新規追加) */}
+      {firingAlarm && (
+        <div className="fixed inset-0 z-[400] flex flex-col items-center justify-center bg-cyan-950/90 backdrop-blur-3xl animate-[pulse_0.5s_infinite]">
+            <div className="flex flex-col items-center gap-8 p-10 md:p-20 border-y-4 border-cyan-400 w-full bg-black/50 text-center">
+                <div className="text-cyan-400 font-digital text-4xl md:text-6xl tracking-widest uppercase animate-bounce">ALARM TRIGGERED</div>
+                <div className="text-white text-6xl md:text-9xl font-black font-digital">{firingAlarm.time}</div>
+                <div className="text-cyan-200 text-2xl tracking-[0.5em] uppercase border px-6 py-2 border-cyan-500/50">{firingAlarm.label}</div>
+                
+                <button 
+                  onClick={dismissAlarm} 
+                  className="mt-8 px-16 py-6 bg-cyan-500 text-black font-black tracking-[0.5em] text-xl md:text-2xl hover:bg-white hover:scale-105 transition-all duration-300 shadow-[0_0_50px_rgba(6,182,212,0.6)]"
+                >
+                  DISMISS
+                </button>
+            </div>
+        </div>
+      )}
+
+      {/* 緊急地震速報オーバーレイ */}
       {activeEEW && (
         <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-red-600/95 backdrop-blur-3xl animate-[pulse_0.4s_infinite]">
             <div className="flex flex-col items-center gap-10 p-8 md:p-20 border-[12px] border-white shadow-[0_0_150px_rgba(255,255,255,0.8)] max-w-[95vw] text-center">
@@ -169,7 +266,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* 背景レイヤー：フェードアニメーション付き */}
+      {/* 背景レイヤー */}
       <div className={`fixed inset-0 z-0 transition-opacity duration-1000 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
         {currentAsset && (
             <div className="absolute inset-0">
@@ -180,7 +277,7 @@ const App: React.FC = () => {
                         autoPlay 
                         muted={isBgMuted} 
                         playsInline 
-                        onEnded={() => nextBackground()} // 動画が終わったら次へ（ループ）
+                        onEnded={() => nextBackground()}
                         className="w-full h-full object-cover"
                     >
                         <source src={currentAsset.url} />
@@ -188,7 +285,6 @@ const App: React.FC = () => {
                 ) : (
                     <div className="w-full h-full bg-cover bg-center bg-no-repeat transition-all duration-700" style={{ backgroundImage: `url(${currentAsset.url})` }} />
                 )}
-                {/* オーバーレイ層：暗さとぼかしを適用 */}
                 <div className="absolute inset-0 bg-black transition-all duration-300" style={{ opacity: bgDimming, backdropFilter: `blur(${bgBlur}px)`, WebkitBackdropFilter: `blur(${bgBlur}px)` }} />
             </div>
         )}
@@ -243,7 +339,7 @@ const App: React.FC = () => {
                     </div>
                 </section>
 
-                {/* 3. 背景アセット管理 (復活した重要項目) */}
+                {/* 3. 背景アセット管理 */}
                 <section>
                     <span className="text-[9px] text-slate-500 font-mono uppercase tracking-[0.2em] block mb-2 border-l-2 border-cyan-600 pl-2">Asset Library</span>
                     <div className="space-y-2 mt-2">
@@ -272,7 +368,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* メインクロックおよび各ウィジェット */}
+      {/* メインコンテンツ */}
       <main className="w-full flex flex-col items-center gap-8 md:gap-12 z-10 relative my-auto py-8">
         <section className="w-full flex flex-col items-center py-4 gap-6">
           <MainClock date={date} />
@@ -286,7 +382,7 @@ const App: React.FC = () => {
       
       <LocalMusicPlayer isOpen={isMusicOpen} onClose={() => setIsMusicOpen(false)} />
 
-      {/* フローティング操作インターフェース (右下) */}
+      {/* 操作インターフェース */}
       <div className="fixed bottom-6 right-6 flex gap-3 z-50 opacity-40 hover:opacity-100 transition-opacity duration-300">
         <button onClick={() => setIsDisplaySettingsOpen(!isDisplaySettingsOpen)} title="System Configuration" className={`p-3 rounded-full border transition-all ${isDisplaySettingsOpen ? 'bg-cyan-500 border-cyan-400 text-black shadow-[0_0_15px_rgba(6,182,212,0.5)]' : 'bg-gray-900/80 border-slate-700 text-slate-400 hover:border-cyan-500/50 hover:text-white'}`}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
